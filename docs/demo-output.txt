@@ -1,56 +1,56 @@
 == plugbox demo ==
-loaded 5 plugins in 118 ms (pooling allocator, epoch tick 5 ms); fixture upstream on 127.0.0.1:63162
+loaded 5 plugins in 79 ms (pooling allocator, epoch tick 5 ms); fixture upstream on 127.0.0.1:60417
   hostile         /hostile  98f66e7e28aa  grants: none
   hostile-nofuel  /nofuel   98f66e7e28aa  grants: none
   counter         /count    fd629b9dc4d9  grants: kv[counter rw]
   hello           /hello    3f4f4beec230  grants: env[GREETING]
   fetcher         /api      ecd4f106f749  grants: env[UPSTREAM] http[8 calls/req]
-data plane http://127.0.0.1:63163  admin plane http://127.0.0.1:63164
+data plane http://127.0.0.1:60418  admin plane http://127.0.0.1:60419
 
 1. well-behaved plugins
-  GET  /hello?name=edge                             -> 200                        0.82 ms  hello from the edge, edge!
+  GET  /hello?name=edge                             -> 200                        0.88 ms  hello from the edge, edge!
        └ env grant: GREETING
-  POST /count/hit/home                              -> 200                        0.43 ms  {"name":"home","count":1}
-  POST /count/hit/home                              -> 200                        0.24 ms  {"name":"home","count":2}
-  POST /count/hit/home                              -> 200                        0.22 ms  {"name":"home","count":3}
+  POST /count/hit/home                              -> 200                        0.53 ms  {"name":"home","count":1}
+  POST /count/hit/home                              -> 200                        0.32 ms  {"name":"home","count":2}
+  POST /count/hit/home                              -> 200                        0.34 ms  {"name":"home","count":3}
        └ KV state outlives each per-request instance
-  GET  /api/proxy/items/42                          -> 200                        0.57 ms  {"item":42,"served_by":"fixture-upstream","target":"/v1/items/42"}
+  GET  /api/proxy/items/42                          -> 200                        0.64 ms  {"item":42,"served_by":"fixture-upstream","target":"/v1/items/42"}
        └ outbound HTTP via the allow-list
 
 2. capability denials (typed errors, no trap)
-  GET  /api/fetch?url=http://169.254.169.254/latest/meta-data/ -> 403                        0.25 ms  forbidden by allow-list: http://169.254.169.254/latest/meta-data/ matches no allow rule
+  GET  /api/fetch?url=http://169.254.169.254/latest/meta-data/ -> 403                        0.29 ms  forbidden by allow-list: http://169.254.169.254/latest/meta-data/ matches no allow rule
        └ cloud metadata: not on the allow-list
-  GET  /api/fetch?url=http://127.0.0.1@169.254.169.254/ -> 400                        0.24 ms  invalid url: userinfo, backslashes and percent-escapes are not allowed in the host
+  GET  /api/fetch?url=http://127.0.0.1@169.254.169.254/ -> 400                        0.28 ms  invalid url: userinfo, backslashes and percent-escapes are not allowed in the host
        └ userinfo confusion rejected by the URL parser
-  GET  /hostile/secret                              -> 200                        0.41 ms  {"granted_secret":false,"wasi_env":[],"etc_passwd":"Err(Os { code: 44, kind: NotFound, mes…
+  GET  /hostile/secret                              -> 200                        0.52 ms  {"granted_secret":false,"wasi_env":[],"etc_passwd":"Err(Os { code: 44, kind: NotFound, mes…
        └ no env, no host env, no filesystem
-  GET  /hostile/kv                                  -> 403                        0.24 ms  kv refused: KvError::NotGranted
+  GET  /hostile/kv                                  -> 403                        0.28 ms  kv refused: KvError::NotGranted
        └ no KV grant
 
 3. resource limits (instance discarded, host unaffected)
-  GET  /hostile/loop                                -> 504 [fuel-exhausted]       4.03 ms  plugin error: fuel-exhausted
+  GET  /hostile/loop                                -> 504 [fuel-exhausted]       4.72 ms  plugin error: fuel-exhausted
        └ infinite loop, 50M fuel budget
-  GET  /nofuel/loop                                 -> 504 [deadline-exceeded]   65.66 ms  plugin error: deadline-exceeded
+  GET  /nofuel/loop                                 -> 504 [deadline-exceeded]   51.95 ms  plugin error: deadline-exceeded
        └ infinite loop, fuel off, 40 ms epoch deadline
-  GET  /nofuel/sleep                                -> 504 [deadline-exceeded]   43.83 ms  plugin error: deadline-exceeded
+  GET  /nofuel/sleep                                -> 504 [deadline-exceeded]   41.63 ms  plugin error: deadline-exceeded
        └ 1 h thread::sleep in wasi:io/poll, cut at the 40 ms deadline
-  GET  /hostile/bomb                                -> 502 [memory-limit]         3.34 ms  plugin error: memory-limit
+  GET  /hostile/bomb                                -> 502 [memory-limit]         3.03 ms  plugin error: memory-limit
        └ allocates until the 16 MiB budget refuses
-  GET  /hostile/recurse                             -> 502 [stack-overflow]       0.59 ms  plugin error: stack-overflow
+  GET  /hostile/recurse                             -> 502 [stack-overflow]       0.51 ms  plugin error: stack-overflow
        └ native wasm stack exhausted
-  GET  /hostile/panic                               -> 502 [guest-abort]          0.37 ms  plugin error: guest-abort
+  GET  /hostile/panic                               -> 502 [guest-abort]          0.48 ms  plugin error: guest-abort
        └ Rust panic = guest abort
-  GET  /hostile/huge-response?bytes=4000000         -> 502 [invalid-response]     1.08 ms  plugin error: invalid-response
+  GET  /hostile/huge-response?bytes=4000000         -> 502 [invalid-response]     0.96 ms  plugin error: invalid-response
        └ 4 MB body > 1 MiB response limit
-  GET  /hello?name=still-healthy                    -> 200                        0.31 ms  hello from the edge, still-healthy!
+  GET  /hello?name=still-healthy                    -> 200                        0.22 ms  hello from the edge, still-healthy!
        └ host still serving
 
 4. hot reload
   POST /reload -> 200 { "added": [], "generation": 2, "rebound": [ "hello" ], "removed": [], "unchanged": [ "counter", "fetcher", "hostile", "hostile-nofuel" ], "updated": [], "warnings": [] }
-  GET  /hello?name=edge                             -> 200                        0.29 ms  bonjour, edge!
+  GET  /hello?name=edge                             -> 200                        0.30 ms  bonjour, edge!
        └ new grant, same compiled component
   POST /reload (broken component) -> 422 active_generation=2 error="plugin `hello`: expected `(`"
-  GET  /hello?name=edge                             -> 200                        0.26 ms  bonjour, edge!
+  GET  /hello?name=edge                             -> 200                        0.24 ms  bonjour, edge!
        └ old snapshot keeps serving
 
 5. admin plane
