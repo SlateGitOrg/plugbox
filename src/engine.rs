@@ -88,7 +88,9 @@ pub fn build_engine(s: &EngineSettings) -> Result<Engine> {
 pub fn deadline_ticks(timeout: Duration, tick: Duration) -> u64 {
     let tick_ns = tick.as_nanos().max(1);
     let ticks = timeout.as_nanos().div_ceil(tick_ns);
-    u64::try_from(ticks).unwrap_or(u64::MAX - 1).saturating_add(1)
+    u64::try_from(ticks)
+        .unwrap_or(u64::MAX - 1)
+        .saturating_add(1)
 }
 
 /// Background thread that advances the engine epoch.
@@ -140,7 +142,10 @@ mod tests {
         assert_eq!(deadline_ticks(Duration::from_millis(1), tick), 2);
         assert_eq!(deadline_ticks(Duration::from_millis(10), tick), 3);
         assert_eq!(deadline_ticks(Duration::from_millis(11), tick), 4);
-        assert_eq!(deadline_ticks(Duration::MAX, Duration::from_nanos(1)), u64::MAX);
+        assert_eq!(
+            deadline_ticks(Duration::MAX, Duration::from_nanos(1)),
+            u64::MAX
+        );
     }
 
     #[test]

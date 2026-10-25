@@ -12,7 +12,11 @@ use plugbox::engine::EngineSettings;
 use plugbox::{Outcome, Registry, Request, Runtime, RuntimeOptions, policy};
 
 #[derive(Parser)]
-#[command(name = "plugbox", version, about = "Sandboxed WebAssembly plugin runtime for edge request handlers")]
+#[command(
+    name = "plugbox",
+    version,
+    about = "Sandboxed WebAssembly plugin runtime for edge request handlers"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -128,11 +132,7 @@ fn check(config: PathBuf) -> plugbox::Result<()> {
     Ok(())
 }
 
-fn run(
-    config: PathBuf,
-    plugin: String,
-    request: Request,
-) -> plugbox::Result<()> {
+fn run(config: PathBuf, plugin: String, request: Request) -> plugbox::Result<()> {
     let cfg = Config::load(&config)?;
     let runtime = Arc::new(runtime_for(&cfg)?);
     let registry = Registry::load(runtime.clone(), &config)?;
@@ -241,7 +241,8 @@ fn main() -> ExitCode {
             path,
             json,
         } => {
-            let scratch = std::env::temp_dir().join(format!("plugbox-bench-{}", std::process::id()));
+            let scratch =
+                std::env::temp_dir().join(format!("plugbox-bench-{}", std::process::id()));
             let opts = BenchOptions {
                 component,
                 iterations,

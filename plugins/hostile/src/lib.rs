@@ -148,7 +148,9 @@ impl Guest for Hostile {
                 plugbox_sdk::respond(200, "application/octet-stream", vec![b'z'; size])
             }
             "/spin" => {
-                let ms: u64 = query_param(&req.query, "ms").and_then(|s| s.parse().ok()).unwrap_or(10);
+                let ms: u64 = query_param(&req.query, "ms")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(10);
                 let start = Instant::now();
                 let mut n: u64 = 0;
                 while start.elapsed() < Duration::from_millis(ms) {

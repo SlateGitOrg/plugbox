@@ -35,7 +35,12 @@ pub enum Mode {
 }
 
 impl Mode {
-    pub const ALL: [Mode; 4] = [Mode::ColdJit, Mode::ColdAot, Mode::WarmOnDemand, Mode::WarmPooled];
+    pub const ALL: [Mode; 4] = [
+        Mode::ColdJit,
+        Mode::ColdAot,
+        Mode::WarmOnDemand,
+        Mode::WarmPooled,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -145,8 +150,12 @@ fn one_request(f: &Fixture, mode: Mode, req: &Request) -> Result<Duration> {
         if mode == Mode::ColdAot && !compiled.from_cache {
             return Err(Error::Engine("AOT cache miss during cold-aot run".into()));
         }
-        f.runtime
-            .bind(&f.cfg.plugins[0], f.plugin.component_path.clone(), compiled, 1)?
+        f.runtime.bind(
+            &f.cfg.plugins[0],
+            f.plugin.component_path.clone(),
+            compiled,
+            1,
+        )?
     } else {
         f.plugin.clone()
     };
@@ -154,7 +163,9 @@ fn one_request(f: &Fixture, mode: Mode, req: &Request) -> Result<Duration> {
     let elapsed = started.elapsed();
     match inv.outcome {
         Outcome::Response(r) if r.status == 200 => Ok(elapsed),
-        other => Err(Error::Engine(format!("benchmark request failed: {other:?}"))),
+        other => Err(Error::Engine(format!(
+            "benchmark request failed: {other:?}"
+        ))),
     }
 }
 
@@ -305,8 +316,13 @@ mod tests {
             ..r.clone()
         };
         let t = render_table(&[r, cold]);
-        assert!(t.contains("| warm-pooled | 10 | 12.3 | 20.0 | 30.0 | 15.0 | 4.0 | 12346 (4 threads) |"));
+        assert!(t.contains(
+            "| warm-pooled | 10 | 12.3 | 20.0 | 30.0 | 15.0 | 4.0 | 12346 (4 threads) |"
+        ));
         assert!(t.contains("| cold-jit | 10 | 12.3 | 20.0 | 30.0 | 15.0 | — |"));
-        assert_eq!(Mode::ALL.map(Mode::label), ["cold-jit", "cold-aot", "warm-ondemand", "warm-pooled"]);
+        assert_eq!(
+            Mode::ALL.map(Mode::label),
+            ["cold-jit", "cold-aot", "warm-ondemand", "warm-pooled"]
+        );
     }
 }

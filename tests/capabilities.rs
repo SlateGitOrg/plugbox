@@ -69,7 +69,11 @@ allow_private = true
 
 fn call(reg: &Registry, plugin: &str, method: &str, path: &str, query: &str) -> (u16, String) {
     let p = reg.snapshot().get(plugin).unwrap();
-    match reg.runtime().invoke(&p, &request(method, path, query)).outcome {
+    match reg
+        .runtime()
+        .invoke(&p, &request(method, path, query))
+        .outcome
+    {
         Outcome::Response(r) => (r.status, body(&r)),
         other => panic!("{plugin} {path}: {other:?}"),
     }
@@ -78,7 +82,10 @@ fn call(reg: &Registry, plugin: &str, method: &str, path: &str, query: &str) -> 
 #[test]
 fn env_grants_are_exact() {
     let (_d, reg, _) = setup("");
-    assert_eq!(call(&reg, "hello", "GET", "/", "name=edge"), (200, "howdy, edge!\n".into()));
+    assert_eq!(
+        call(&reg, "hello", "GET", "/", "name=edge"),
+        (200, "howdy, edge!\n".into())
+    );
     assert_eq!(
         call(&reg, "hello", "GET", "/env", ""),
         (200, r#"{"granted":["GREETING","REGION"]}"#.into())
@@ -112,13 +119,28 @@ fn kv_state_persists_across_fresh_instances() {
             (200, format!(r#"{{"name":"home","count":{i}}}"#))
         );
     }
-    assert_eq!(call(&reg, "counter", "GET", "/hit/home", "").1, r#"{"name":"home","count":5}"#);
+    assert_eq!(
+        call(&reg, "counter", "GET", "/hit/home", "").1,
+        r#"{"name":"home","count":5}"#
+    );
     // Read-only grant on the same namespace can read but not write.
-    assert_eq!(call(&reg, "counter-ro", "GET", "/hit/home", "").1, r#"{"name":"home","count":5}"#);
-    assert_eq!(call(&reg, "counter-ro", "POST", "/hit/home", ""), (403, "kv is read-only\n".into()));
+    assert_eq!(
+        call(&reg, "counter-ro", "GET", "/hit/home", "").1,
+        r#"{"name":"home","count":5}"#
+    );
+    assert_eq!(
+        call(&reg, "counter-ro", "POST", "/hit/home", ""),
+        (403, "kv is read-only\n".into())
+    );
     // No grant at all.
-    assert_eq!(call(&reg, "counter-none", "POST", "/hit/home", ""), (403, "kv not granted\n".into()));
-    assert_eq!(call(&reg, "counter", "GET", "/keys", "").1, r#"{"counters":["home"]}"#);
+    assert_eq!(
+        call(&reg, "counter-none", "POST", "/hit/home", ""),
+        (403, "kv not granted\n".into())
+    );
+    assert_eq!(
+        call(&reg, "counter", "GET", "/keys", "").1,
+        r#"{"counters":["home"]}"#
+    );
     assert_eq!(call(&reg, "counter", "DELETE", "/hit/home", "").0, 200);
     assert_eq!(reg.runtime().kv().usage("counter"), (0, 0));
     let m = reg.runtime().metrics();
@@ -130,7 +152,10 @@ fn kv_state_persists_across_fresh_instances() {
 fn kv_quota_surfaces_as_a_guest_error() {
     let (_d, reg, _) = setup("");
     for k in ["a", "b", "c"] {
-        assert_eq!(call(&reg, "counter", "POST", &format!("/hit/{k}"), "").0, 200);
+        assert_eq!(
+            call(&reg, "counter", "POST", &format!("/hit/{k}"), "").0,
+            200
+        );
     }
     let (status, text) = call(&reg, "counter", "POST", "/hit/d", "");
     assert_eq!(status, 507);
@@ -142,7 +167,10 @@ fn outbound_http_reaches_only_allowed_upstreams() {
     let (_d, reg, up) = setup("");
     let (status, text) = call(&reg, "fetcher", "GET", "/proxy/items/7", "verbose=1");
     assert_eq!(status, 200);
-    assert_eq!(text, r#"{"upstream":"ok","target":"/api/items/7?verbose=1"}"#);
+    assert_eq!(
+        text,
+        r#"{"upstream":"ok","target":"/api/items/7?verbose=1"}"#
+    );
 
     let outside = format!("url=http://{up}/admin");
     let (status, text) = call(&reg, "fetcher", "GET", "/fetch", &outside);
@@ -183,7 +211,13 @@ fn unreachable_upstream_is_a_transport_error() {
         lit(&wasm("fetcher"))
     );
     let reg2 = registry(&dir, reg.runtime().clone(), &cfg);
-    let (status, text) = call(&reg2, "f", "GET", "/fetch", &format!("url=http://127.0.0.1:{port}/"));
+    let (status, text) = call(
+        &reg2,
+        "f",
+        "GET",
+        "/fetch",
+        &format!("url=http://127.0.0.1:{port}/"),
+    );
     assert_eq!(status, 502, "{text}");
     assert!(text.starts_with("upstream error"), "{text}");
 }

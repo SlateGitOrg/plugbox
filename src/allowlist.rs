@@ -584,7 +584,14 @@ mod tests {
         assert!(lax.check(ip("::ffff:169.254.169.254"), true).is_err());
         assert!(lax.check(ip("224.0.0.1"), true).is_err());
         // Private targets need a literal rule or allow_private.
-        for p in ["127.0.0.1", "10.1.2.3", "192.168.0.1", "100.64.0.1", "::1", "fd00::1"] {
+        for p in [
+            "127.0.0.1",
+            "10.1.2.3",
+            "192.168.0.1",
+            "100.64.0.1",
+            "::1",
+            "fd00::1",
+        ] {
             assert!(strict.check(ip(p), false).is_err(), "{p}");
             assert!(strict.check(ip(p), true).is_ok(), "{p}");
             assert!(lax.check(ip(p), false).is_ok(), "{p}");

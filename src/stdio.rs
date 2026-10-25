@@ -113,8 +113,14 @@ mod tests {
         let mut cx = Context::from_waker(waker);
         let r = Pin::new(&mut p).poll_write(&mut cx, b"hello");
         assert!(matches!(r, Poll::Ready(Ok(5))));
-        assert!(matches!(Pin::new(&mut p).poll_flush(&mut cx), Poll::Ready(Ok(()))));
-        assert!(matches!(Pin::new(&mut p).poll_shutdown(&mut cx), Poll::Ready(Ok(()))));
+        assert!(matches!(
+            Pin::new(&mut p).poll_flush(&mut cx),
+            Poll::Ready(Ok(()))
+        ));
+        assert!(matches!(
+            Pin::new(&mut p).poll_shutdown(&mut cx),
+            Poll::Ready(Ok(()))
+        ));
         assert_eq!(p.contents(), "he");
     }
 }

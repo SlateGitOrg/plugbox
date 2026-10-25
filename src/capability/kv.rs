@@ -43,7 +43,9 @@ fn check_key(key: &str) -> Result<(), KvError> {
         return Err(KvError::InvalidKey("empty key".into()));
     }
     if key.len() > MAX_KEY_LEN {
-        return Err(KvError::InvalidKey(format!("key longer than {MAX_KEY_LEN} bytes")));
+        return Err(KvError::InvalidKey(format!(
+            "key longer than {MAX_KEY_LEN} bytes"
+        )));
     }
     if key.chars().any(char::is_control) {
         return Err(KvError::InvalidKey("control characters in key".into()));
@@ -192,8 +194,14 @@ mod tests {
         for k in ["a", "b", "c"] {
             kv.set(&g, k, b"1".to_vec()).unwrap();
         }
-        assert!(matches!(kv.set(&g, "d", b"1".to_vec()), Err(KvError::QuotaExceeded(_))));
-        assert!(matches!(kv.increment(&g, "d", 1), Err(KvError::QuotaExceeded(_))));
+        assert!(matches!(
+            kv.set(&g, "d", b"1".to_vec()),
+            Err(KvError::QuotaExceeded(_))
+        ));
+        assert!(matches!(
+            kv.increment(&g, "d", 1),
+            Err(KvError::QuotaExceeded(_))
+        ));
         kv.set(&g, "a", b"22".to_vec()).unwrap(); // overwrite is fine at the cap
         assert_eq!(kv.usage("q"), (3, 4));
         assert!(matches!(kv.get(&g, ""), Err(KvError::InvalidKey(_))));
@@ -231,7 +239,10 @@ mod tests {
         kv.set(&g, "s", b"abc".to_vec()).unwrap();
         assert_eq!(kv.increment(&g, "s", 1), Err(KvError::NotANumber));
         kv.set(&g, "m", i64::MAX.to_string().into_bytes()).unwrap();
-        assert!(matches!(kv.increment(&g, "m", 1), Err(KvError::QuotaExceeded(_))));
+        assert!(matches!(
+            kv.increment(&g, "m", 1),
+            Err(KvError::QuotaExceeded(_))
+        ));
     }
 
     #[test]

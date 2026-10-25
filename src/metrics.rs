@@ -59,7 +59,12 @@ impl CounterVec {
         let _ = writeln!(out, "# TYPE {} counter", self.name);
         let s = self.series.lock().unwrap_or_else(|p| p.into_inner());
         for (values, v) in s.iter() {
-            let _ = writeln!(out, "{}{} {v}", self.name, label_set(self.labels, values, None));
+            let _ = writeln!(
+                out,
+                "{}{} {v}",
+                self.name,
+                label_set(self.labels, values, None)
+            );
         }
     }
 }
@@ -363,8 +368,12 @@ mod tests {
         assert_eq!(m.requests.get(&["zzz", "200"]), 0);
         assert_eq!(m.requests.total(), 5);
         let text = m.render();
-        let a = text.find("plugbox_requests_total{plugin=\"a\",status=\"500\"} 3").unwrap();
-        let b = text.find("plugbox_requests_total{plugin=\"b\",status=\"200\"} 2").unwrap();
+        let a = text
+            .find("plugbox_requests_total{plugin=\"a\",status=\"500\"} 3")
+            .unwrap();
+        let b = text
+            .find("plugbox_requests_total{plugin=\"b\",status=\"200\"} 2")
+            .unwrap();
         assert!(a < b, "series must be sorted");
         assert!(text.contains(r#"plugin="we\"ird\\name\n""#), "{text}");
         assert!(text.contains("# TYPE plugbox_requests_total counter"));
@@ -380,10 +389,16 @@ mod tests {
         assert_eq!(m.request_duration.count(&["p"]), 4);
         assert_eq!(m.request_duration.count(&["q"]), 0);
         let text = m.render();
-        assert!(text.contains(r#"plugbox_request_duration_seconds_bucket{plugin="p",le="0.0001"} 1"#));
-        assert!(text.contains(r#"plugbox_request_duration_seconds_bucket{plugin="p",le="0.005"} 3"#));
+        assert!(
+            text.contains(r#"plugbox_request_duration_seconds_bucket{plugin="p",le="0.0001"} 1"#)
+        );
+        assert!(
+            text.contains(r#"plugbox_request_duration_seconds_bucket{plugin="p",le="0.005"} 3"#)
+        );
         assert!(text.contains(r#"plugbox_request_duration_seconds_bucket{plugin="p",le="1.0"} 3"#));
-        assert!(text.contains(r#"plugbox_request_duration_seconds_bucket{plugin="p",le="+Inf"} 4"#));
+        assert!(
+            text.contains(r#"plugbox_request_duration_seconds_bucket{plugin="p",le="+Inf"} 4"#)
+        );
         assert!(text.contains(r#"plugbox_request_duration_seconds_count{plugin="p"} 4"#));
         assert!(text.contains(r#"plugbox_request_duration_seconds_sum{plugin="p"} 7.00605"#));
     }

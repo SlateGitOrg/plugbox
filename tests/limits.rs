@@ -74,7 +74,11 @@ impl Env {
         }
         let rt = self.reg.runtime();
         assert_eq!(rt.metrics().in_flight.get(), 0);
-        assert_eq!(rt.pool_live_instances(), Some(0), "every pool slot must be returned");
+        assert_eq!(
+            rt.pool_live_instances(),
+            Some(0),
+            "every pool slot must be returned"
+        );
     }
 }
 
@@ -91,10 +95,20 @@ fn infinite_loop_trips_fuel() {
     let inv = e.call("hostile", "/loop", "");
     assert_eq!(trap_kind(&inv), TrapKind::FuelExhausted);
     assert_eq!(inv.outcome.http_status(), 504);
-    assert_eq!(inv.stats.fuel_consumed, 100_000_000, "the whole budget is consumed");
-    assert!(inv.stats.total < Duration::from_secs(3), "fuel trips before the deadline");
     assert_eq!(
-        e.reg.runtime().metrics().traps.get(&["hostile", "fuel-exhausted"]),
+        inv.stats.fuel_consumed, 100_000_000,
+        "the whole budget is consumed"
+    );
+    assert!(
+        inv.stats.total < Duration::from_secs(3),
+        "fuel trips before the deadline"
+    );
+    assert_eq!(
+        e.reg
+            .runtime()
+            .metrics()
+            .traps
+            .get(&["hostile", "fuel-exhausted"]),
         1
     );
     e.assert_healthy();
@@ -109,7 +123,10 @@ fn infinite_loop_trips_epoch_deadline_without_fuel() {
     assert_eq!(trap_kind(&inv), TrapKind::DeadlineExceeded);
     assert_eq!(inv.outcome.error_label(), Some("deadline-exceeded"));
     assert!(elapsed >= Duration::from_millis(60), "{elapsed:?}");
-    assert!(elapsed < Duration::from_millis(1000), "deadline overshoot: {elapsed:?}");
+    assert!(
+        elapsed < Duration::from_millis(1000),
+        "deadline overshoot: {elapsed:?}"
+    );
     e.assert_healthy();
 }
 
@@ -119,15 +136,26 @@ fn memory_bomb_trips_memory_limit() {
     let inv = e.call("hostile", "/bomb", "");
     assert_eq!(trap_kind(&inv), TrapKind::MemoryLimit);
     assert_eq!(inv.outcome.http_status(), 502);
-    assert!(inv.stats.memory_peak <= 16 << 20, "peak {}", inv.stats.memory_peak);
-    assert!(inv.stats.memory_peak > 8 << 20, "the bomb really allocated: {}", inv.stats.memory_peak);
+    assert!(
+        inv.stats.memory_peak <= 16 << 20,
+        "peak {}",
+        inv.stats.memory_peak
+    );
+    assert!(
+        inv.stats.memory_peak > 8 << 20,
+        "the bomb really allocated: {}",
+        inv.stats.memory_peak
+    );
     e.assert_healthy();
 }
 
 #[test]
 fn unbounded_recursion_trips_stack_limit() {
     let e = env();
-    assert_eq!(trap_kind(&e.call("hostile", "/recurse", "")), TrapKind::StackOverflow);
+    assert_eq!(
+        trap_kind(&e.call("hostile", "/recurse", "")),
+        TrapKind::StackOverflow
+    );
     e.assert_healthy();
 }
 
@@ -136,7 +164,9 @@ fn shadow_stack_overflow_is_a_contained_memory_fault() {
     let e = env();
     let inv = e.call("hostile", "/stack", "");
     assert_eq!(trap_kind(&inv), TrapKind::MemoryFault);
-    assert!(matches!(&inv.outcome, Outcome::Trap { detail, .. } if detail.contains("out of bounds")));
+    assert!(
+        matches!(&inv.outcome, Outcome::Trap { detail, .. } if detail.contains("out of bounds"))
+    );
     e.assert_healthy();
 }
 
@@ -145,7 +175,11 @@ fn panic_is_a_contained_guest_abort() {
     let e = env();
     let inv = e.call("hostile", "/panic", "");
     assert_eq!(trap_kind(&inv), TrapKind::GuestAbort);
-    assert!(inv.stats.stdio.contains("panicked on purpose"), "{}", inv.stats.stdio);
+    assert!(
+        inv.stats.stdio.contains("panicked on purpose"),
+        "{}",
+        inv.stats.stdio
+    );
     e.assert_healthy();
 }
 
@@ -157,7 +191,11 @@ fn forbidden_host_is_refused_without_trapping() {
         panic!("{:?}", inv.outcome)
     };
     assert_eq!(r.status, 403);
-    assert!(body(r).starts_with("forbidden: http://169.254.169.254"), "{}", body(r));
+    assert!(
+        body(r).starts_with("forbidden: http://169.254.169.254"),
+        "{}",
+        body(r)
+    );
     let m = e.reg.runtime().metrics();
     assert_eq!(m.capability_denials.get(&["hostile", "http"]), 1);
     assert_eq!(m.outbound_requests.get(&["hostile", "forbidden"]), 1);
@@ -185,7 +223,10 @@ fn ungranted_env_files_and_kv_are_invisible() {
     let text = body(&r);
     assert!(text.contains("\"granted_secret\":false"), "{text}");
     assert!(text.contains("\"wasi_env\":[]"), "host env leaked: {text}");
-    assert!(text.contains("\"etc_passwd\":\"Err("), "filesystem reachable: {text}");
+    assert!(
+        text.contains("\"etc_passwd\":\"Err("),
+        "filesystem reachable: {text}"
+    );
 
     let Outcome::Response(r) = e.call("hostile", "/kv", "").outcome else {
         panic!()
@@ -215,12 +256,20 @@ fn outbound_call_budget_is_enforced() {
 fn log_and_stdout_floods_are_capped() {
     let e = env();
     let inv = e.call("hostile", "/log-flood", "");
-    assert!(matches!(&inv.outcome, Outcome::Response(r) if r.status == 200), "{:?}", inv.outcome);
+    assert!(
+        matches!(&inv.outcome, Outcome::Response(r) if r.status == 200),
+        "{:?}",
+        inv.outcome
+    );
     assert_eq!(inv.stats.log_lines, 10_000);
     assert_eq!(inv.stats.stdio.len(), 1024);
     assert!(inv.stats.stdio_dropped > 1_000_000);
     assert_eq!(
-        e.reg.runtime().metrics().guest_logs_dropped.get(&["hostile"]),
+        e.reg
+            .runtime()
+            .metrics()
+            .guest_logs_dropped
+            .get(&["hostile"]),
         10_000 - 5
     );
     e.assert_healthy();
@@ -230,7 +279,11 @@ fn log_and_stdout_floods_are_capped() {
 fn oversized_response_is_replaced() {
     let e = env();
     let inv = e.call("hostile", "/huge-response", "bytes=2000000");
-    assert!(matches!(inv.outcome, Outcome::InvalidResponse(_)), "{:?}", inv.outcome);
+    assert!(
+        matches!(inv.outcome, Outcome::InvalidResponse(_)),
+        "{:?}",
+        inv.outcome
+    );
     assert_eq!(inv.outcome.http_status(), 502);
     let ok = e.call("hostile", "/huge-response", "bytes=1000");
     assert!(matches!(&ok.outcome, Outcome::Response(r) if r.body.len() == 1000));
@@ -241,7 +294,11 @@ fn oversized_response_is_replaced() {
 fn work_under_the_deadline_succeeds() {
     let e = env();
     let inv = e.call("hostile-nofuel", "/spin", "ms=10");
-    assert!(matches!(&inv.outcome, Outcome::Response(r) if r.status == 200), "{:?}", inv.outcome);
+    assert!(
+        matches!(&inv.outcome, Outcome::Response(r) if r.status == 200),
+        "{:?}",
+        inv.outcome
+    );
 }
 
 /// Hostile requests running concurrently with good ones: every good request
@@ -257,7 +314,11 @@ fn host_stays_healthy_under_concurrent_abuse() {
             let route = routes[i % routes.len()];
             for _ in 0..3 {
                 let inv = e.call("hostile", route, "");
-                assert!(matches!(inv.outcome, Outcome::Trap { .. }), "{route}: {:?}", inv.outcome);
+                assert!(
+                    matches!(inv.outcome, Outcome::Trap { .. }),
+                    "{route}: {:?}",
+                    inv.outcome
+                );
             }
             0usize
         }));
@@ -294,4 +355,3 @@ fn many_sequential_traps_do_not_leak_pool_slots() {
     }
     e.assert_healthy();
 }
-

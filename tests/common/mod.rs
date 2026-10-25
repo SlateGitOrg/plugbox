@@ -133,7 +133,12 @@ pub fn spawn_upstream() -> SocketAddr {
 }
 
 /// Minimal blocking HTTP client for talking to a running server.
-pub fn http(addr: SocketAddr, method: &str, target: &str, body: &[u8]) -> (u16, Vec<(String, String)>, String) {
+pub fn http(
+    addr: SocketAddr,
+    method: &str,
+    target: &str,
+    body: &[u8],
+) -> (u16, Vec<(String, String)>, String) {
     let mut s = TcpStream::connect(addr).unwrap();
     s.set_read_timeout(Some(Duration::from_secs(20))).unwrap();
     write!(
@@ -144,9 +149,16 @@ pub fn http(addr: SocketAddr, method: &str, target: &str, body: &[u8]) -> (u16, 
     .unwrap();
     s.write_all(body).unwrap();
     let r = read_response(&mut BufReader::new(s), 16 << 20, method).unwrap();
-    (r.status, r.headers, String::from_utf8_lossy(&r.body).into_owned())
+    (
+        r.status,
+        r.headers,
+        String::from_utf8_lossy(&r.body).into_owned(),
+    )
 }
 
 pub fn header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
-    headers.iter().find(|(k, _)| k == name).map(|(_, v)| v.as_str())
+    headers
+        .iter()
+        .find(|(k, _)| k == name)
+        .map(|(_, v)| v.as_str())
 }

@@ -114,7 +114,10 @@ mod tests {
     fn budget_spans_all_memories() {
         let mut l = MemoryLimiter::new(1000);
         assert!(l.memory_growing(0, 600, None).unwrap());
-        assert!(l.memory_growing(0, 300, None).unwrap(), "second memory shares the budget");
+        assert!(
+            l.memory_growing(0, 300, None).unwrap(),
+            "second memory shares the budget"
+        );
         assert!(!l.memory_growing(300, 500, None).unwrap());
         assert_eq!(l.denied(), Some(1100));
         assert_eq!(l.used(), 900);
@@ -127,9 +130,13 @@ mod tests {
     fn failed_growth_is_refunded() {
         let mut l = MemoryLimiter::new(1000);
         assert!(l.memory_growing(0, 400, None).unwrap());
-        l.memory_grow_failed(wasmtime::format_err!("os said no")).unwrap();
+        l.memory_grow_failed(wasmtime::format_err!("os said no"))
+            .unwrap();
         assert_eq!(l.used(), 0);
-        assert!(!l.memory_growing(0, 10, Some(5)).unwrap(), "declared maximum is respected");
+        assert!(
+            !l.memory_growing(0, 10, Some(5)).unwrap(),
+            "declared maximum is respected"
+        );
     }
 
     #[test]

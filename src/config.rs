@@ -405,7 +405,8 @@ impl Config {
                     ));
                 }
                 for rule in &http.allow {
-                    AllowRule::parse(rule).map_err(|e| ctx(&format!("allow rule `{rule}`: {e}")))?;
+                    AllowRule::parse(rule)
+                        .map_err(|e| ctx(&format!("allow rule `{rule}`: {e}")))?;
                 }
             }
             if let Some(kv) = &p.grants.kv {
@@ -437,8 +438,7 @@ fn valid_name(s: &str) -> bool {
     !s.is_empty()
         && s.len() <= 64
         && s.starts_with(|c: char| c.is_ascii_lowercase())
-        && s
-            .chars()
+        && s.chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
 }
 
@@ -502,7 +502,10 @@ mod tests {
         assert!(p.grants.kv.is_none(), "kv must be denied by default");
         assert!(p.grants.env.vars.is_empty());
         assert_eq!(cfg.resolve(&p.component), PathBuf::from("/srv/hello.wasm"));
-        assert_eq!(cfg.resolve(Path::new("/abs.wasm")), PathBuf::from("/abs.wasm"));
+        assert_eq!(
+            cfg.resolve(Path::new("/abs.wasm")),
+            PathBuf::from("/abs.wasm")
+        );
         assert_eq!(p.kv_namespace(), None);
     }
 
@@ -550,7 +553,10 @@ mod tests {
     fn rejects_unknown_fields_and_bad_values() {
         let cases = [
             ("[server]\nlisten = \"nope\"", "invalid socket"),
-            ("[[plugins]]\nname='a'\nroute='/a'\ncomponent='a.wasm'\nfuel=1", "unknown field"),
+            (
+                "[[plugins]]\nname='a'\nroute='/a'\ncomponent='a.wasm'\nfuel=1",
+                "unknown field",
+            ),
             ("[runtime]\nepoch_tick_ms = 0", "epoch_tick_ms"),
             ("[runtime]\npool_size = 0", "pool_size"),
             ("[runtime]\nmax_memory = 100", "max_memory"),
@@ -573,17 +579,44 @@ mod tests {
                 plugin("") + "[[plugins]]\nname='q'\nroute='/p/'\ncomponent='q.wasm'\n",
                 "already mounted",
             ),
-            ("[[plugins]]\nname='Bad'\nroute='/x'\ncomponent='x'".into(), "name must be"),
-            ("[[plugins]]\nname='x'\nroute='x'\ncomponent='x'".into(), "route must start"),
-            ("[[plugins]]\nname='x'\nroute='/a/../b'\ncomponent='x'".into(), "route must"),
-            ("[[plugins]]\nname='x'\nroute='/_plugbox/x'\ncomponent='x'".into(), "reserved"),
+            (
+                "[[plugins]]\nname='Bad'\nroute='/x'\ncomponent='x'".into(),
+                "name must be",
+            ),
+            (
+                "[[plugins]]\nname='x'\nroute='x'\ncomponent='x'".into(),
+                "route must start",
+            ),
+            (
+                "[[plugins]]\nname='x'\nroute='/a/../b'\ncomponent='x'".into(),
+                "route must",
+            ),
+            (
+                "[[plugins]]\nname='x'\nroute='/_plugbox/x'\ncomponent='x'".into(),
+                "reserved",
+            ),
             (plugin("limits = { timeout_ms = 0 }"), "timeout_ms"),
-            (plugin("limits = { memory = \"1GiB\" }"), "exceeds runtime.max_memory"),
-            (plugin("[plugins.grants.http]\nallow = []"), "allow is empty"),
-            (plugin("[plugins.grants.http]\nallow = ['ftp://x']"), "allow rule"),
-            (plugin("[plugins.grants.kv]\nnamespace = 'A B'"), "namespace"),
+            (
+                plugin("limits = { memory = \"1GiB\" }"),
+                "exceeds runtime.max_memory",
+            ),
+            (
+                plugin("[plugins.grants.http]\nallow = []"),
+                "allow is empty",
+            ),
+            (
+                plugin("[plugins.grants.http]\nallow = ['ftp://x']"),
+                "allow rule",
+            ),
+            (
+                plugin("[plugins.grants.kv]\nnamespace = 'A B'"),
+                "namespace",
+            ),
             (plugin("[plugins.grants.kv]\nmax_keys = 0"), "max_keys"),
-            (plugin("[plugins.grants.env]\nvars = { 'A=B' = 'x' }"), "invalid env var"),
+            (
+                plugin("[plugins.grants.env]\nvars = { 'A=B' = 'x' }"),
+                "invalid env var",
+            ),
         ];
         for (text, needle) in cases {
             let err = parse(&text).unwrap_err().to_string();

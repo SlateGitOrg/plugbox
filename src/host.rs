@@ -205,9 +205,7 @@ impl plugbox::host::outbound_http::Host for HostState {
             Ok(_) => "ok",
             Err(e) => e.label(),
         };
-        self.metrics
-            .outbound_requests
-            .inc(&[&self.plugin, label]);
+        self.metrics.outbound_requests.inc(&[&self.plugin, label]);
         match result {
             Ok(r) => Ok(OutboundResponse {
                 status: r.status,

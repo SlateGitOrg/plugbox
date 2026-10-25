@@ -223,7 +223,10 @@ impl Outbound {
                 .map_err(|e| FetchError::Transport(format!("resolve {name}: {e}")))?,
         };
         if addrs.is_empty() {
-            return Err(FetchError::Transport(format!("{} resolved to nothing", url.host)));
+            return Err(FetchError::Transport(format!(
+                "{} resolved to nothing",
+                url.host
+            )));
         }
         for a in &addrs {
             cap.policy
@@ -320,7 +323,10 @@ impl Upstream for HttpClient {
 }
 
 fn is_timeout(e: &io::Error) -> bool {
-    matches!(e.kind(), io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock)
+    matches!(
+        e.kind(),
+        io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+    )
 }
 
 fn set_timeouts(s: &TcpStream, deadline: Instant) -> io::Result<()> {
@@ -361,7 +367,9 @@ fn map_read(e: io::Error) -> FetchError {
 fn read_line(r: &mut impl BufRead, budget: &mut usize) -> Result<String, FetchError> {
     let mut line = Vec::new();
     let limit = u64::try_from(*budget).unwrap_or(u64::MAX) + 1;
-    r.take(limit).read_until(b'\n', &mut line).map_err(map_read)?;
+    r.take(limit)
+        .read_until(b'\n', &mut line)
+        .map_err(map_read)?;
     if line.len() > *budget {
         return Err(transport("response head too large"));
     }
@@ -581,7 +589,10 @@ mod tests {
             call(&mut b, "http://127.0.0.1:9000/admin"),
             Err(FetchError::Forbidden(_))
         ));
-        assert_eq!(call(&mut b, "http://127.0.0.1:9000/api/b"), Err(FetchError::QuotaExceeded));
+        assert_eq!(
+            call(&mut b, "http://127.0.0.1:9000/api/b"),
+            Err(FetchError::QuotaExceeded)
+        );
         let seen = rec.seen.lock().unwrap();
         assert_eq!(seen.len(), 1);
         assert_eq!(seen[0].method, "GET");
@@ -603,12 +614,24 @@ mod tests {
         let mut go = |c: &HttpCapability, url: &str| {
             ob.fetch(Some(c), &mut b, FetchRequest::get(url), soon())
         };
-        assert!(matches!(go(&strict, "http://rebind.svc.test/"), Err(FetchError::Forbidden(_))));
-        assert!(matches!(go(&strict, "http://mixed.svc.test/"), Err(FetchError::Forbidden(_))));
-        assert!(matches!(go(&lax, "http://meta.svc.test/"), Err(FetchError::Forbidden(_))));
+        assert!(matches!(
+            go(&strict, "http://rebind.svc.test/"),
+            Err(FetchError::Forbidden(_))
+        ));
+        assert!(matches!(
+            go(&strict, "http://mixed.svc.test/"),
+            Err(FetchError::Forbidden(_))
+        ));
+        assert!(matches!(
+            go(&lax, "http://meta.svc.test/"),
+            Err(FetchError::Forbidden(_))
+        ));
         assert!(go(&lax, "http://rebind.svc.test/").is_ok());
         assert!(go(&strict, "http://public.svc.test/").is_ok());
-        assert!(matches!(go(&strict, "http://nxdomain.svc.test/"), Err(FetchError::Transport(_))));
+        assert!(matches!(
+            go(&strict, "http://nxdomain.svc.test/"),
+            Err(FetchError::Transport(_))
+        ));
         assert_eq!(rec.seen.lock().unwrap().len(), 2);
     }
 
@@ -627,9 +650,15 @@ mod tests {
         assert!(matches!(bad_method, Err(FetchError::InvalidUrl(_))));
         let mut post = FetchRequest::get("http://127.0.0.1:1/");
         post.method = "POST".into();
-        post.headers = vec![("Host".into(), "evil".into()), ("X-Keep".into(), "1".into())];
+        post.headers = vec![
+            ("Host".into(), "evil".into()),
+            ("X-Keep".into(), "1".into()),
+        ];
         ob.fetch(Some(&c), &mut b, post, soon()).unwrap();
-        assert_eq!(rec.seen.lock().unwrap()[0].headers, vec![("x-keep".to_string(), "1".to_string())]);
+        assert_eq!(
+            rec.seen.lock().unwrap()[0].headers,
+            vec![("x-keep".to_string(), "1".to_string())]
+        );
         let invalid = ob.fetch(Some(&c), &mut b, FetchRequest::get("not a url"), soon());
         assert!(matches!(invalid, Err(FetchError::InvalidUrl(_))));
     }
@@ -641,7 +670,12 @@ mod tests {
         let mut b = CallBudget::default();
         let past = Instant::now() - Duration::from_millis(1);
         assert_eq!(
-            ob.fetch(Some(&c), &mut b, FetchRequest::get("http://127.0.0.1:1/"), past),
+            ob.fetch(
+                Some(&c),
+                &mut b,
+                FetchRequest::get("http://127.0.0.1:1/"),
+                past
+            ),
             Err(FetchError::Timeout)
         );
     }
@@ -665,7 +699,11 @@ mod tests {
 
     #[test]
     fn parses_length_chunked_and_eof_bodies() {
-        let r = parse("HTTP/1.1 200 OK\r\nContent-Length: 5\r\nX-A: b\r\n\r\nhello", 10).unwrap();
+        let r = parse(
+            "HTTP/1.1 200 OK\r\nContent-Length: 5\r\nX-A: b\r\n\r\nhello",
+            10,
+        )
+        .unwrap();
         assert_eq!((r.status, r.body.as_slice()), (200, &b"hello"[..]));
         assert_eq!(r.headers, vec![("x-a".to_string(), "b".to_string())]);
         let r = parse(
@@ -682,10 +720,19 @@ mod tests {
 
     #[test]
     fn rejects_malformed_and_oversized_responses() {
-        assert_eq!(parse("HTTP/1.1 200 OK\r\nContent-Length: 50\r\n\r\n", 10), Err(FetchError::TooLarge));
-        assert_eq!(parse("HTTP/1.1 200 OK\r\n\r\n0123456789A", 10), Err(FetchError::TooLarge));
         assert_eq!(
-            parse("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nff\r\n", 10),
+            parse("HTTP/1.1 200 OK\r\nContent-Length: 50\r\n\r\n", 10),
+            Err(FetchError::TooLarge)
+        );
+        assert_eq!(
+            parse("HTTP/1.1 200 OK\r\n\r\n0123456789A", 10),
+            Err(FetchError::TooLarge)
+        );
+        assert_eq!(
+            parse(
+                "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\nff\r\n",
+                10
+            ),
             Err(FetchError::TooLarge)
         );
         for bad in [
@@ -701,10 +748,16 @@ mod tests {
             "HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nab",
             "HTTP/1.1 200 OK\r\nX: y",
         ] {
-            assert!(matches!(parse(bad, 10), Err(FetchError::Transport(_))), "{bad:?}");
+            assert!(
+                matches!(parse(bad, 10), Err(FetchError::Transport(_))),
+                "{bad:?}"
+            );
         }
         let huge_head = format!("HTTP/1.1 200 OK\r\nX: {}\r\n\r\n", "a".repeat(MAX_HEAD));
-        assert!(matches!(parse(&huge_head, 10), Err(FetchError::Transport(_))));
+        assert!(matches!(
+            parse(&huge_head, 10),
+            Err(FetchError::Transport(_))
+        ));
     }
 
     #[test]
@@ -721,8 +774,10 @@ mod tests {
                 raw.extend_from_slice(&buf[..n]);
             }
             let req = String::from_utf8_lossy(&raw).to_string();
-            s.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nhi")
-                .unwrap();
+            s.write_all(
+                b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\n\r\nhi",
+            )
+            .unwrap();
             req
         });
         let req = VettedRequest {
@@ -779,7 +834,11 @@ mod tests {
             Err(FetchError::Transport(m)) if m.contains("https")
         ));
         // A port nobody listens on: bind then drop to get a free one.
-        let port = TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+        let port = TcpListener::bind("127.0.0.1:0")
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
         req.url = Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap();
         req.addrs = vec![SocketAddr::from(([127, 0, 0, 1], port))];
         assert!(matches!(

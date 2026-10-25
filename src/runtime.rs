@@ -218,8 +218,7 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 
 fn valid_header_name(s: &str) -> bool {
     !s.is_empty()
-        && s
-            .bytes()
+        && s.bytes()
             .all(|b| b.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(&b))
 }
 
@@ -399,7 +398,11 @@ impl Runtime {
         });
         let mut store = Store::new(&self.engine, state);
         store.limiter(|s| &mut s.limiter);
-        let fuel_budget = if limits.fuel == 0 { u64::MAX } else { limits.fuel };
+        let fuel_budget = if limits.fuel == 0 {
+            u64::MAX
+        } else {
+            limits.fuel
+        };
         // Fuel is enabled engine-wide, so this cannot fail.
         let _ = store.set_fuel(fuel_budget);
         store.set_epoch_deadline(deadline_ticks(limits.timeout(), self.settings.epoch_tick));
@@ -512,7 +515,11 @@ fn classify(err: &wasmtime::Error, state: &HostState, during_instantiate: bool) 
             kind: TrapKind::MemoryLimit,
             detail: format!(
                 "memory growth to {requested} bytes refused ({})",
-                if during_instantiate { "at instantiation" } else { "while handling" }
+                if during_instantiate {
+                    "at instantiation"
+                } else {
+                    "while handling"
+                }
             ),
         };
     }
@@ -563,7 +570,10 @@ mod tests {
     #[test]
     fn response_validation() {
         let rt = runtime();
-        assert!(matches!(rt.validate(resp(200, vec![("x-a", "b")], 10)), Outcome::Response(_)));
+        assert!(matches!(
+            rt.validate(resp(200, vec![("x-a", "b")], 10)),
+            Outcome::Response(_)
+        ));
         for bad in [
             resp(99, vec![], 0),
             resp(600, vec![], 0),
@@ -588,23 +598,40 @@ mod tests {
         assert_eq!(Outcome::InvalidResponse(String::new()).http_status(), 502);
         assert_eq!(Outcome::Response(resp(201, vec![], 0)).http_status(), 201);
         assert_eq!(Outcome::Response(resp(201, vec![], 0)).error_label(), None);
-        assert_eq!(trap(TrapKind::StackOverflow).error_label(), Some("stack-overflow"));
-        assert_eq!(trap(TrapKind::GuestAbort).error_label(), Some("guest-abort"));
-        assert_eq!(trap(TrapKind::MemoryFault).error_label(), Some("memory-fault"));
+        assert_eq!(
+            trap(TrapKind::StackOverflow).error_label(),
+            Some("stack-overflow")
+        );
+        assert_eq!(
+            trap(TrapKind::GuestAbort).error_label(),
+            Some("guest-abort")
+        );
+        assert_eq!(
+            trap(TrapKind::MemoryFault).error_label(),
+            Some("memory-fault")
+        );
         assert_eq!(trap(TrapKind::Other).error_label(), Some("trap"));
-        assert_eq!(Outcome::Overloaded(String::new()).error_label(), Some("overloaded"));
+        assert_eq!(
+            Outcome::Overloaded(String::new()).error_label(),
+            Some("overloaded")
+        );
     }
 
     #[test]
     fn rejects_non_components_and_policy_violations() {
         let rt = runtime();
-        assert!(matches!(rt.compile("x", b"not wasm"), Err(Error::Component { .. })));
+        assert!(matches!(
+            rt.compile("x", b"not wasm"),
+            Err(Error::Component { .. })
+        ));
         let sockets = br#"(component (import "wasi:sockets/tcp@0.2.0" (instance)))"#;
         match rt.compile("x", sockets) {
             Err(Error::Policy { violations, .. }) => assert_eq!(violations.len(), 2),
             other => panic!("expected policy error, got {other:?}"),
         }
-        let missing = rt.compile_file("x", Path::new("/no/such/file.wasm")).unwrap_err();
+        let missing = rt
+            .compile_file("x", Path::new("/no/such/file.wasm"))
+            .unwrap_err();
         assert!(matches!(missing, Error::ComponentIo { .. }));
         assert_eq!(sha256_hex(b"abc").len(), 64);
         assert!(rt.pool_live_instances().is_some());

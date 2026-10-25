@@ -98,7 +98,11 @@ mod tests {
     #[test]
     fn rejects_sockets_http_and_missing_export() {
         let r = evaluate(
-            s(&["wasi:sockets/tcp@0.2.6", "wasi:http/outgoing-handler@0.2.6", "evil:x/y"]),
+            s(&[
+                "wasi:sockets/tcp@0.2.6",
+                "wasi:http/outgoing-handler@0.2.6",
+                "evil:x/y",
+            ]),
             s(&["wasi:cli/run@0.2.6"]),
         );
         assert!(!r.is_allowed());

@@ -49,7 +49,10 @@ impl Guest for Counter {
             _ => return text(405, "method not allowed\n"),
         };
         match result {
-            Ok(count) => json(200, format!("{{\"name\":{},\"count\":{count}}}", json_str(name))),
+            Ok(count) => json(
+                200,
+                format!("{{\"name\":{},\"count\":{count}}}", json_str(name)),
+            ),
             Err(e) => kv_failure(e),
         }
     }

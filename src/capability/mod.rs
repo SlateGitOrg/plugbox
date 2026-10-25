@@ -107,7 +107,11 @@ impl Capabilities {
             parts.push(format!(
                 "http[{} calls/req{}]",
                 h.max_requests,
-                if h.policy.allow_private { ", private ok" } else { "" }
+                if h.policy.allow_private {
+                    ", private ok"
+                } else {
+                    ""
+                }
             ));
         }
         if let Some(k) = &self.kv {
@@ -132,16 +136,21 @@ mod tests {
     use std::path::Path;
 
     fn plugin(extra: &str) -> PluginConfig {
-        let text = format!(
-            "[[plugins]]\nname = \"p\"\nroute = \"/p\"\ncomponent = \"p.wasm\"\n{extra}"
-        );
-        Config::parse(&text, Path::new(".")).unwrap().plugins.remove(0)
+        let text =
+            format!("[[plugins]]\nname = \"p\"\nroute = \"/p\"\ncomponent = \"p.wasm\"\n{extra}");
+        Config::parse(&text, Path::new("."))
+            .unwrap()
+            .plugins
+            .remove(0)
     }
 
     #[test]
     fn nothing_granted_by_default() {
         let (caps, warnings) = Capabilities::resolve(&plugin(""), |_| Some("leak".into())).unwrap();
-        assert!(caps.env.is_empty(), "host env must never be inherited implicitly");
+        assert!(
+            caps.env.is_empty(),
+            "host env must never be inherited implicitly"
+        );
         assert!(caps.http.is_none() && caps.kv.is_none());
         assert!(warnings.is_empty());
         assert_eq!(caps.summary(), "none");
@@ -166,7 +175,10 @@ mod tests {
         })
         .unwrap();
         assert_eq!(caps.env.get("A").map(String::as_str), Some("1"));
-        assert_eq!(caps.env.get("HOME_REGION").map(String::as_str), Some("eu-west"));
+        assert_eq!(
+            caps.env.get("HOME_REGION").map(String::as_str),
+            Some("eu-west")
+        );
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("MISSING"));
         let http = caps.http.as_ref().unwrap();

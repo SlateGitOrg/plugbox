@@ -71,7 +71,12 @@ fn strip_route<'a>(route: &str, path: &'a str) -> Option<&'a str> {
 
 impl Snapshot {
     fn new(generation: u64, mut plugins: Vec<Arc<LoadedPlugin>>, fingerprint: Fingerprint) -> Self {
-        plugins.sort_by(|a, b| b.route.len().cmp(&a.route.len()).then(a.route.cmp(&b.route)));
+        plugins.sort_by(|a, b| {
+            b.route
+                .len()
+                .cmp(&a.route.len())
+                .then(a.route.cmp(&b.route))
+        });
         Snapshot {
             generation,
             plugins,
@@ -81,9 +86,9 @@ impl Snapshot {
 
     /// Find the plugin serving `path` and the plugin-relative path.
     pub fn route(&self, path: &str) -> Option<(Arc<LoadedPlugin>, String)> {
-        self.plugins.iter().find_map(|p| {
-            strip_route(&p.route, path).map(|rest| (p.clone(), rest.to_string()))
-        })
+        self.plugins
+            .iter()
+            .find_map(|p| strip_route(&p.route, path).map(|rest| (p.clone(), rest.to_string())))
     }
 
     /// Every plugin, longest route first.
@@ -373,7 +378,10 @@ fn build(
             .collect();
         report.removed.sort();
     }
-    Ok((Snapshot::new(generation, plugins, fingerprint(watched)), report))
+    Ok((
+        Snapshot::new(generation, plugins, fingerprint(watched)),
+        report,
+    ))
 }
 
 #[cfg(test)]

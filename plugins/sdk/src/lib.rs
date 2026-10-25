@@ -25,8 +25,8 @@ pub mod bindings {
     });
 }
 
-pub use bindings::exports::plugbox::host::handler::Guest;
 pub use bindings::export;
+pub use bindings::exports::plugbox::host::handler::Guest;
 pub use bindings::plugbox::host::types::{Request, Response};
 pub use bindings::plugbox::host::{env, kv, log, outbound_http};
 
@@ -41,7 +41,11 @@ pub fn respond(status: u16, content_type: &str, body: impl Into<Vec<u8>>) -> Res
 
 /// Plain-text response.
 pub fn text(status: u16, body: impl Into<String>) -> Response {
-    respond(status, "text/plain; charset=utf-8", body.into().into_bytes())
+    respond(
+        status,
+        "text/plain; charset=utf-8",
+        body.into().into_bytes(),
+    )
 }
 
 /// JSON response; `body` must already be valid JSON.
@@ -66,15 +70,13 @@ pub fn percent_decode(s: &str) -> String {
     while i < bytes.len() {
         match bytes[i] {
             b'+' => out.push(b' '),
-            b'%' if i + 2 < bytes.len() => {
-                match (hex(bytes[i + 1]), hex(bytes[i + 2])) {
-                    (Some(h), Some(l)) => {
-                        out.push(h << 4 | l);
-                        i += 2;
-                    }
-                    _ => out.push(b'%'),
+            b'%' if i + 2 < bytes.len() => match (hex(bytes[i + 1]), hex(bytes[i + 2])) {
+                (Some(h), Some(l)) => {
+                    out.push(h << 4 | l);
+                    i += 2;
                 }
-            }
+                _ => out.push(b'%'),
+            },
             b => out.push(b),
         }
         i += 1;

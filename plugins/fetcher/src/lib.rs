@@ -25,7 +25,11 @@ fn fetch(url: String) -> Response {
                 .filter(|(k, _)| k == "content-type")
                 .collect();
             headers.push(("x-via".to_string(), "plugbox-fetcher".to_string()));
-            Response { status: resp.status, headers, body: resp.body }
+            Response {
+                status: resp.status,
+                headers,
+                body: resp.body,
+            }
         }
         Err(err) => {
             let (status, msg) = match err {

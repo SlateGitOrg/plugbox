@@ -140,9 +140,10 @@ impl DataPlane {
                     if HOP_BY_HOP.contains(&k.as_str()) || k.starts_with("x-plugbox-") {
                         continue;
                     }
-                    if let (Ok(name), Ok(value)) =
-                        (HeaderName::from_bytes(k.as_bytes()), HeaderValue::from_str(&v))
-                    {
+                    if let (Ok(name), Ok(value)) = (
+                        HeaderName::from_bytes(k.as_bytes()),
+                        HeaderValue::from_str(&v),
+                    ) {
                         out.headers_mut().append(name, value);
                     }
                 }
@@ -225,7 +226,10 @@ async fn admin(registry: Arc<Registry>, req: hyper::Request<Incoming>) -> Resp {
                     })
                 })
                 .collect();
-            json_resp(200, &json!({ "generation": snap.generation, "plugins": list }))
+            json_resp(
+                200,
+                &json!({ "generation": snap.generation, "plugins": list }),
+            )
         }
         (&Method::POST, "/reload") => {
             let reg = registry.clone();
@@ -252,7 +256,10 @@ async fn admin(registry: Arc<Registry>, req: hyper::Request<Incoming>) -> Resp {
                 Err(_) => text(500, "reload task failed\n"),
             }
         }
-        _ => text(404, "admin endpoints: GET /health /metrics /plugins, POST /reload\n"),
+        _ => text(
+            404,
+            "admin endpoints: GET /health /metrics /plugins, POST /reload\n",
+        ),
     }
 }
 

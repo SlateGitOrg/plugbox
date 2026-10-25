@@ -46,7 +46,10 @@ fn config_change_rebinds_without_recompiling() {
     assert_eq!(report.rebound, ["edge"]);
     assert!(report.updated.is_empty() && report.added.is_empty());
     let after = reg.snapshot().get("edge").unwrap();
-    assert!(Arc::ptr_eq(&before.compiled, &after.compiled), "same bytes must not recompile");
+    assert!(
+        Arc::ptr_eq(&before.compiled, &after.compiled),
+        "same bytes must not recompile"
+    );
     assert_eq!(greet(&reg), "v2, world!\n");
     assert_eq!(reg.runtime().metrics().generation.get(), 2);
     // No change at all is still a successful, empty reload.
@@ -63,7 +66,10 @@ fn component_swap_updates_and_kv_survives() {
     let p = reg.snapshot().get("edge").unwrap();
     let hit = |reg: &Registry| match reg
         .runtime()
-        .invoke(&reg.snapshot().get("edge").unwrap(), &request("POST", "/hit/x", ""))
+        .invoke(
+            &reg.snapshot().get("edge").unwrap(),
+            &request("POST", "/hit/x", ""),
+        )
         .outcome
     {
         Outcome::Response(r) => body(&r),
@@ -93,7 +99,11 @@ fn failed_reload_keeps_serving_the_old_snapshot() {
     std::fs::write(dir.path("plugbox.toml"), "[[plugins]]\nname = 3\n").unwrap();
     assert!(matches!(reg.reload(), Err(Error::ConfigParse { .. })));
     // 4. Missing component file.
-    std::fs::write(dir.path("plugbox.toml"), config(&dir.path("gone.wasm"), "v1")).unwrap();
+    std::fs::write(
+        dir.path("plugbox.toml"),
+        config(&dir.path("gone.wasm"), "v1"),
+    )
+    .unwrap();
     assert!(matches!(reg.reload(), Err(Error::ComponentIo { .. })));
     assert_eq!(greet(&reg), "v1, world!\n", "old version still serves");
     assert_eq!(reg.runtime().metrics().reloads.get(&["error"]), 4);
@@ -108,7 +118,10 @@ fn failed_reload_keeps_serving_the_old_snapshot() {
 #[test]
 fn restart_only_settings_produce_warnings() {
     let (dir, reg, component) = setup();
-    let text = format!("[server]\nmax_concurrency = 3\n[runtime]\npool_size = 9\n{}", config(&component, "v1"));
+    let text = format!(
+        "[server]\nmax_concurrency = 3\n[runtime]\npool_size = 9\n{}",
+        config(&component, "v1")
+    );
     std::fs::write(dir.path("plugbox.toml"), text).unwrap();
     let report = reg.reload().unwrap();
     assert_eq!(report.warnings.len(), 2, "{:?}", report.warnings);
@@ -178,10 +191,17 @@ fn watcher_reloads_changed_files() {
     std::fs::write(&component, b"broken").unwrap();
     let deadline = Instant::now() + Duration::from_secs(10);
     while reg.runtime().metrics().reloads.get(&["error"]) == 0 {
-        assert!(Instant::now() < deadline, "watcher never tried the broken file");
+        assert!(
+            Instant::now() < deadline,
+            "watcher never tried the broken file"
+        );
         std::thread::sleep(Duration::from_millis(10));
     }
     std::thread::sleep(Duration::from_millis(150));
-    assert_eq!(reg.runtime().metrics().reloads.get(&["error"]), 1, "must not retry-loop");
+    assert_eq!(
+        reg.runtime().metrics().reloads.get(&["error"]),
+        1,
+        "must not retry-loop"
+    );
     assert_eq!(greet(&reg), "watched, world!\n");
 }
