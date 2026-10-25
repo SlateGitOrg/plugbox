@@ -23,10 +23,10 @@ wasmtime::component::bindgen!({
     path: "wit",
 });
 
-pub use exports::plugbox::host::handler::{Request, Response};
 use self::plugbox::host::kv::KvError;
 use self::plugbox::host::log::Level;
 use self::plugbox::host::outbound_http::{HttpError, OutboundRequest, OutboundResponse};
+pub use exports::plugbox::host::handler::{Request, Response};
 
 /// Longest guest log message kept; longer ones are truncated.
 pub const MAX_LOG_MESSAGE: usize = 1024;
@@ -141,6 +141,23 @@ fn truncate(s: &str, max: usize) -> &str {
     &s[..end]
 }
 
+/// Escape control characters so a guest cannot forge extra lines (or
+/// terminal escapes) in the host's log stream.
+fn sanitize(s: &str) -> std::borrow::Cow<'_, str> {
+    if !s.chars().any(char::is_control) {
+        return std::borrow::Cow::Borrowed(s);
+    }
+    let mut out = String::with_capacity(s.len() + 8);
+    for c in s.chars() {
+        if c.is_control() {
+            out.extend(c.escape_default());
+        } else {
+            out.push(c);
+        }
+    }
+    std::borrow::Cow::Owned(out)
+}
+
 impl self::plugbox::host::log::Host for HostState {
     fn log(&mut self, level: Level, message: String) {
         self.log_lines = self.log_lines.saturating_add(1);
@@ -148,7 +165,7 @@ impl self::plugbox::host::log::Host for HostState {
             self.metrics.guest_logs_dropped.inc(&[&self.plugin]);
             return;
         }
-        let msg = truncate(&message, MAX_LOG_MESSAGE);
+        let msg = sanitize(truncate(&message, MAX_LOG_MESSAGE));
         let plugin = &*self.plugin;
         match level {
             Level::Trace => tracing::trace!(target: "plugbox::guest", plugin, "{msg}"),
@@ -282,5 +299,17 @@ mod tests {
         assert_eq!(truncate("hello", 10), "hello");
         assert_eq!(truncate("hello", 3), "hel");
         assert_eq!(truncate("héllo", 2), "h");
+    }
+
+    #[test]
+    fn control_characters_are_escaped() {
+        assert!(matches!(
+            sanitize("plain"),
+            std::borrow::Cow::Borrowed("plain")
+        ));
+        assert_eq!(
+            sanitize("ok\nlevel=ERROR forged\u{1b}[2J"),
+            "ok\\nlevel=ERROR forged\\u{1b}[2J"
+        );
     }
 }

@@ -284,8 +284,13 @@ async fn main() {
         );
         std::fs::write(&cfg_path, bad).expect("write bad config");
         let (status, _, body, _) = http(admin, "POST", "/reload");
-        let first = body.lines().nth(1).unwrap_or("").trim();
-        println!("  POST /reload (broken component) -> {status} {first}");
+        let reply: serde_json::Value = serde_json::from_str(&body).unwrap_or_default();
+        let error = reply["error"].as_str().unwrap_or("?");
+        println!(
+            "  POST /reload (broken component) -> {status} active_generation={} error=\"{}\"",
+            reply["active_generation"],
+            error.lines().next().unwrap_or("")
+        );
         show(
             data,
             "GET",
@@ -295,10 +300,17 @@ async fn main() {
 
         println!("\n5. admin plane");
         let (_, _, health, _) = http(admin, "GET", "/health");
+        let h: serde_json::Value = serde_json::from_str(&health).unwrap_or_default();
         println!(
-            "  GET /health -> {}",
-            health.split_whitespace().collect::<Vec<_>>().join(" ")
+            "  GET /health -> status={} generation={} plugins={} in_flight={} pool_live_instances={}",
+            h["status"], h["generation"], h["plugins"], h["in_flight"], h["pool_live_instances"]
         );
+        if let Some(e) = h["last_reload_error"].as_str() {
+            println!(
+                "    last_reload_error: {}",
+                e.lines().next().unwrap_or("")
+            );
+        }
         let (_, _, metrics, _) = http(admin, "GET", "/metrics");
         println!("  GET /metrics (selected series):");
         for line in metrics.lines().filter(|l| {
