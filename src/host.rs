@@ -24,9 +24,9 @@ wasmtime::component::bindgen!({
 });
 
 pub use exports::plugbox::host::handler::{Request, Response};
-use plugbox::host::kv::KvError;
-use plugbox::host::log::Level;
-use plugbox::host::outbound_http::{HttpError, OutboundRequest, OutboundResponse};
+use self::plugbox::host::kv::KvError;
+use self::plugbox::host::log::Level;
+use self::plugbox::host::outbound_http::{HttpError, OutboundRequest, OutboundResponse};
 
 /// Longest guest log message kept; longer ones are truncated.
 pub const MAX_LOG_MESSAGE: usize = 1024;
@@ -128,7 +128,7 @@ pub fn add_to_linker(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
     Plugin::add_to_linker::<HostState, HasSelf<HostState>>(linker, |s| s)
 }
 
-impl plugbox::host::types::Host for HostState {}
+impl self::plugbox::host::types::Host for HostState {}
 
 fn truncate(s: &str, max: usize) -> &str {
     if s.len() <= max {
@@ -141,7 +141,7 @@ fn truncate(s: &str, max: usize) -> &str {
     &s[..end]
 }
 
-impl plugbox::host::log::Host for HostState {
+impl self::plugbox::host::log::Host for HostState {
     fn log(&mut self, level: Level, message: String) {
         self.log_lines = self.log_lines.saturating_add(1);
         if self.log_lines > self.max_log_lines {
@@ -160,7 +160,7 @@ impl plugbox::host::log::Host for HostState {
     }
 }
 
-impl plugbox::host::env::Host for HostState {
+impl self::plugbox::host::env::Host for HostState {
     fn get(&mut self, name: String) -> Option<String> {
         let value = self.caps.env.get(&name).cloned();
         if value.is_none() {
@@ -188,7 +188,7 @@ impl From<FetchError> for HttpError {
     }
 }
 
-impl plugbox::host::outbound_http::Host for HostState {
+impl self::plugbox::host::outbound_http::Host for HostState {
     fn fetch(&mut self, req: OutboundRequest) -> Result<OutboundResponse, HttpError> {
         let result = self.outbound.fetch(
             self.caps.http.as_ref(),
@@ -251,7 +251,7 @@ impl HostState {
     }
 }
 
-impl plugbox::host::kv::Host for HostState {
+impl self::plugbox::host::kv::Host for HostState {
     fn get(&mut self, key: String) -> Result<Option<Vec<u8>>, KvError> {
         self.with_kv(|kv, g| kv.get(g, &key))
     }
