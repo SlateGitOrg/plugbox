@@ -1,0 +1,132 @@
+/// The plugbox host interface.
+///
+/// A plugin is a WebAssembly component that targets the `plugin` world: it
+/// exports a single request handler and may import the capability interfaces
+/// below. Every capability is deny-by-default; the host operator grants each
+/// one per plugin in `plugbox.toml`. Calling an interface that was not granted
+/// never traps — it returns a typed `not-granted` error (or `none`), so a
+/// plugin can degrade gracefully.
+package plugbox:host@0.1.0;
+
+/// Request and response shapes shared by the handler and outbound HTTP.
+interface types {
+    /// Header list. Names are lower-cased by the host; order is preserved and
+    /// duplicates are allowed.
+    type headers = list<tuple<string, string>>;
+
+    /// An inbound HTTP request, fully buffered by the host.
+    record request {
+        method: string,
+        /// Path relative to the plugin's mount point, always starting with `/`.
+        path: string,
+        /// Raw query string without the leading `?` (may be empty).
+        query: string,
+        headers: headers,
+        body: list<u8>,
+    }
+
+    /// The handler's response.
+    record response {
+        status: u16,
+        headers: headers,
+        body: list<u8>,
+    }
+}
+
+/// Structured logging into the host's log stream (always granted).
+interface log {
+    enum level { trace, debug, info, warn, error }
+
+    /// Log a message. The host truncates long messages and rate-limits the
+    /// number of log lines per request.
+    log: func(level: level, message: string);
+}
+
+/// Environment variables. Only variables explicitly granted to the plugin are
+/// visible; the host process environment is never inherited.
+interface env {
+    /// Value of a granted variable, or `none` if it is not granted.
+    get: func(name: string) -> option<string>;
+
+    /// Names of all variables granted to this plugin, sorted.
+    names: func() -> list<string>;
+}
+
+/// Outbound HTTP, restricted to an operator-defined allow-list.
+interface outbound-http {
+    use types.{headers};
+
+    record outbound-request {
+        method: string,
+        /// Absolute URL, e.g. `http://127.0.0.1:9000/v1/items?id=3`.
+        url: string,
+        headers: headers,
+        body: list<u8>,
+    }
+
+    record outbound-response {
+        status: u16,
+        headers: headers,
+        body: list<u8>,
+    }
+
+    variant http-error {
+        /// The plugin has no outbound-HTTP grant at all.
+        not-granted,
+        /// The URL is not matched by any allow-list rule.
+        forbidden(string),
+        /// The URL could not be parsed or uses an unsupported scheme.
+        invalid-url(string),
+        /// The per-request outbound call budget is used up.
+        quota-exceeded,
+        /// The upstream did not answer within the remaining time budget.
+        timeout,
+        /// Connection or protocol failure.
+        transport(string),
+        /// The upstream response exceeded the configured size limit.
+        too-large,
+    }
+
+    fetch: func(req: outbound-request) -> result<outbound-response, http-error>;
+}
+
+/// A namespaced key-value store, shared by all instances of one plugin.
+interface kv {
+    variant kv-error {
+        /// The plugin has no KV grant.
+        not-granted,
+        /// The grant is read-only and a write was attempted.
+        read-only,
+        /// A key-count or value-size quota would be exceeded.
+        quota-exceeded(string),
+        /// The key is empty, too long, or contains control characters.
+        invalid-key(string),
+        /// `increment` was called on a value that is not a decimal integer.
+        not-a-number,
+    }
+
+    get: func(key: string) -> result<option<list<u8>>, kv-error>;
+    set: func(key: string, value: list<u8>) -> result<_, kv-error>;
+    /// Returns whether the key existed.
+    delete: func(key: string) -> result<bool, kv-error>;
+    /// Keys with the given prefix, sorted, at most `limit` entries.
+    list-keys: func(prefix: string, limit: u32) -> result<list<string>, kv-error>;
+    /// Atomically add `delta` to a decimal integer value (missing = 0) and
+    /// return the new value.
+    increment: func(key: string, delta: s64) -> result<s64, kv-error>;
+}
+
+/// The single export every plugin provides.
+interface handler {
+    use types.{request, response};
+
+    handle: func(req: request) -> response;
+}
+
+world plugin {
+    import log;
+    import env;
+    import outbound-http;
+    import kv;
+    export handler;
+}

@@ -1,0 +1,29 @@
+//! # plugbox
+//!
+//! A sandboxed WebAssembly plugin runtime for edge request handlers, built on
+//! wasmtime and the component model.
+//!
+//! Plugins are WebAssembly components targeting the `plugbox:host/plugin`
+//! world (`wit/plugbox.wit`). Each request runs in a fresh instance drawn
+//! from wasmtime's pooling allocator, under three independent limits (fuel,
+//! an epoch wall-clock deadline, a memory budget), with capabilities (env,
+//! outbound HTTP, KV) granted per plugin by the operator.
+//!
+//! Module map:
+//!
+//! | module | role |
+//! |---|---|
+//! | [`config`] | `plugbox.toml` schema and validation |
+//! | [`allowlist`] | strict URL parsing, allow rules, address policy |
+//! | [`capability`] | resolved grants; [`capability::kv`] store |
+//! | [`outbound`] | outbound-HTTP enforcement point and HTTP/1.1 client |
+//! | [`engine`] | wasmtime engine configuration, epoch ticker |
+//! | [`limits`] | per-instance memory limiter |
+//! | [`policy`] | load-time import policy |
+//! | [`host`] | WIT bindings and host-function implementations |
+//! | [`runtime`] | compile, bind, invoke, classify outcomes |
+//! | [`registry`] | route table snapshots and hot reload |
+//! | [`server`] | hyper data plane and admin plane |
+//! | [`metrics`] | Prometheus registry |
+//! | [`bench`] | cold vs pooled instantiation benchmark |
+

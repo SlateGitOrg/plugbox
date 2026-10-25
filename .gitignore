@@ -1,0 +1,9 @@
+/target
+/plugins/target
+/plugins/dist/
+/.plugbox-cache/
+*.cwasm
+*.profraw
+/lcov.info
+/coverage/
+.DS_Store

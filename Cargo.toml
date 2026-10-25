@@ -1,0 +1,38 @@
+[package]
+name = "plugbox"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+license = "MIT"
+description = "Sandboxed WebAssembly component runtime for edge request handlers"
+publish = false
+
+[workspace]
+exclude = ["plugins"]
+
+[dependencies]
+wasmtime = { version = "=50.0.0", default-features = false, features = ["cranelift", "component-model", "pooling-allocator", "runtime", "std", "wat", "parallel-compilation", "backtrace", "demangle", "addr2line"] }
+wasmtime-wasi = { version = "=50.0.0", default-features = false, features = ["p2"] }
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
+clap = { version = "4.5", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time", "signal"] }
+hyper = { version = "1", features = ["server", "client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+bytes = "1"
+serde_json = "1"
+sha2 = "0.10"
+
+[dev-dependencies]
+proptest = "1"
+
+[profile.dev.package."*"]
+opt-level = 2
+
+[profile.release]
+debug = false
