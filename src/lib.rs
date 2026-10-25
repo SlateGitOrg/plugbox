@@ -28,5 +28,6 @@
 //! | [`bench`] | cold vs pooled instantiation benchmark |
 
 pub mod allowlist;
+pub mod capability;
 pub mod config;
 pub mod error;
