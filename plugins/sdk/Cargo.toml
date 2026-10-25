@@ -1,0 +1,10 @@
+[package]
+name = "plugbox-sdk"
+description = "Guest-side bindings and helpers for writing plugbox plugins"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+wit-bindgen.workspace = true
