@@ -10,6 +10,8 @@
 //! * `wasi:io`, `wasi:clocks`, `wasi:random`, `wasi:cli` — needed by any
 //!   `wasm32-wasip2` program; the CLI world is inert (no args, empty env,
 //!   stdout/stderr captured, stdin empty).
+//!   `wasi:clocks/monotonic-clock` is the deadline-capped version from
+//!   [`crate::clock`], so clock waits cannot outlive the request deadline.
 //! * `wasi:filesystem` — linked but inert: no directories are preopened, so
 //!   every path operation fails.
 //!

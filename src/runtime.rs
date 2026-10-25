@@ -437,6 +437,12 @@ impl Runtime {
             stdio_dropped: state.stdio.dropped(),
         };
         let outcome = match result {
+            // A guest wait cut short by the deadline is a deadline trap even
+            // if the epoch check did not fire before the guest returned.
+            Ok(_) if state.sleep_cut() => Outcome::Trap {
+                kind: TrapKind::DeadlineExceeded,
+                detail: "guest blocked in wasi:io/poll past the request deadline".into(),
+            },
             Ok(resp) => self.validate(resp),
             Err((during_instantiate, err)) => classify(&err, state, during_instantiate),
         };

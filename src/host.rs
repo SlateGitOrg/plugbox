@@ -13,6 +13,7 @@ use wasmtime_wasi::{WasiCtx, WasiCtxView, WasiView};
 
 use crate::capability::kv::{KvError as HostKvError, KvStore};
 use crate::capability::{Capabilities, Capability};
+use crate::clock::{GuardedClockView, SleepGuard};
 use crate::limits::MemoryLimiter;
 use crate::metrics::Metrics;
 use crate::outbound::{CallBudget, FetchError, Outbound};
@@ -43,6 +44,7 @@ pub struct HostState {
     metrics: Arc<Metrics>,
     budget: CallBudget,
     deadline: Instant,
+    pub(crate) clock: SleepGuard,
     max_log_lines: u32,
     log_lines: u32,
     pub(crate) stdio: CappedPipe,
@@ -86,6 +88,7 @@ impl HostState {
             metrics: ctx.metrics,
             budget: CallBudget::default(),
             deadline: ctx.deadline,
+            clock: SleepGuard::new(ctx.deadline),
             max_log_lines: ctx.max_log_lines,
             log_lines: 0,
             stdio,
@@ -111,6 +114,16 @@ impl HostState {
     pub fn log_lines(&self) -> u32 {
         self.log_lines
     }
+
+    /// True when a guest wait in `wasi:io/poll` was ended by the request
+    /// deadline (see [`crate::clock`]).
+    pub fn sleep_cut(&self) -> bool {
+        self.clock.was_cut()
+    }
+
+    pub(crate) fn clock_view(&mut self) -> GuardedClockView<'_> {
+        GuardedClockView::new(&mut self.table, &self.clock)
+    }
 }
 
 impl WasiView for HostState {
@@ -122,9 +135,12 @@ impl WasiView for HostState {
     }
 }
 
-/// Register WASI (sync) and the plugbox interfaces.
+/// Register WASI (sync) and the plugbox interfaces. The stock monotonic
+/// clock is replaced by the deadline-capped one from [`crate::clock`], so no
+/// guest wait in `wasi:io/poll` can outlive the request deadline.
 pub fn add_to_linker(linker: &mut Linker<HostState>) -> wasmtime::Result<()> {
     wasmtime_wasi::p2::add_to_linker_sync(linker)?;
+    crate::clock::shadow_monotonic_clock(linker)?;
     Plugin::add_to_linker::<HostState, HasSelf<HostState>>(linker, |s| s)
 }
 

@@ -19,6 +19,7 @@
 //! | [`outbound`] | outbound-HTTP enforcement point and HTTP/1.1 client |
 //! | [`engine`] | wasmtime engine configuration, epoch ticker |
 //! | [`limits`] | per-instance memory limiter |
+//! | [`clock`] | deadline-capped `wasi:clocks/monotonic-clock` |
 //! | [`policy`] | load-time import policy |
 //! | [`host`] | WIT bindings and host-function implementations |
 //! | [`runtime`] | compile, bind, invoke, classify outcomes |
@@ -30,6 +31,7 @@
 pub mod allowlist;
 pub mod bench;
 pub mod capability;
+pub mod clock;
 pub mod config;
 pub mod engine;
 pub mod error;
