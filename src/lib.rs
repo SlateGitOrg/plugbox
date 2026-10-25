@@ -37,5 +37,6 @@ pub mod limits;
 pub mod metrics;
 pub mod outbound;
 pub mod policy;
+pub mod registry;
 pub mod runtime;
 pub mod stdio;
