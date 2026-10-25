@@ -162,6 +162,42 @@ fn excess_concurrency_is_shed() {
     assert_eq!(l.reg.runtime().metrics().shed.get(&["concurrency"]), 1);
 }
 
+/// A guest that sleeps in `wasi:io/poll` for an hour holds its concurrency
+/// permit only until its own deadline, so it cannot starve other plugins.
+#[test]
+fn sleeping_plugins_release_their_permits_at_the_deadline() {
+    let l = live(2);
+    let addr = l.data();
+    let started = std::time::Instant::now();
+    let sleepers: Vec<_> = (0..2)
+        .map(|_| {
+            std::thread::spawn(move || {
+                let (status, headers, _) = http(addr, "GET", "/hostile/sleep", b"");
+                (
+                    status,
+                    header(&headers, "x-plugbox-error").map(str::to_owned),
+                )
+            })
+        })
+        .collect();
+    for s in sleepers {
+        assert_eq!(
+            s.join().unwrap(),
+            (504, Some("deadline-exceeded".to_owned()))
+        );
+    }
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(4),
+        "permits held past the 1.5 s deadline: {elapsed:?}"
+    );
+    assert_eq!(
+        http(addr, "GET", "/hello", b"").0,
+        200,
+        "pool is free again"
+    );
+}
+
 #[test]
 fn admin_plane_reports_health_metrics_and_plugins() {
     let l = live(8);

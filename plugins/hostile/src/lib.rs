@@ -17,6 +17,7 @@
 //! | `/log-flood`     | logs 10 000 lines and floods stdout            | host truncates                    |
 //! | `/huge-response` | returns a body larger than the response limit  | host replaces with 502            |
 //! | `/spin?ms=N`     | busy-waits N milliseconds (wall clock)         | fine below the deadline           |
+//! | `/sleep?ms=N`    | blocks in WASI poll (`thread::sleep`, 1 h)     | sleep cut at the deadline → 504   |
 
 use std::hint::black_box;
 use std::time::{Duration, Instant};
@@ -157,6 +158,17 @@ impl Guest for Hostile {
                     n = black_box(n.wrapping_add(1));
                 }
                 text(200, format!("spun {ms}ms ({n} iterations)\n"))
+            }
+            "/sleep" => {
+                // Blocking in `wasi:io/poll` runs no wasm, so neither fuel
+                // nor the epoch deadline can interrupt it; the host must cap
+                // the sleep itself.
+                let ms: u64 = query_param(&req.query, "ms")
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(3_600_000);
+                let start = Instant::now();
+                std::thread::sleep(Duration::from_millis(ms));
+                text(200, format!("slept {}ms\n", start.elapsed().as_millis()))
             }
             _ => text(404, "unknown hostile route\n"),
         }

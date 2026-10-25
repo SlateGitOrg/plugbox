@@ -355,3 +355,74 @@ fn many_sequential_traps_do_not_leak_pool_slots() {
     }
     e.assert_healthy();
 }
+
+/// A guest blocked in `wasi:io/poll` runs no wasm, so neither fuel nor the
+/// epoch deadline can interrupt it. The host caps every clock pollable at
+/// the request deadline and turns a cut-short sleep into a deadline trap.
+#[test]
+fn blocking_sleep_is_cut_at_the_deadline() {
+    let e = env();
+    // One hour requested; 60 ms timeout, fuel unlimited.
+    let started = Instant::now();
+    let inv = e.call("hostile-nofuel", "/sleep", "");
+    let elapsed = started.elapsed();
+    assert_eq!(trap_kind(&inv), TrapKind::DeadlineExceeded, "{inv:?}");
+    assert_eq!(inv.outcome.http_status(), 504);
+    assert!(elapsed >= Duration::from_millis(60), "{elapsed:?}");
+    assert!(
+        elapsed < Duration::from_millis(1000),
+        "sleep not capped at the deadline: {elapsed:?}"
+    );
+    // Same with a fuel budget: sleeping burns almost no fuel, so fuel alone
+    // would never stop it either.
+    let inv = e.call("hostile", "/sleep", "ms=600000");
+    assert_eq!(trap_kind(&inv), TrapKind::DeadlineExceeded, "{inv:?}");
+    assert!(inv.stats.total < Duration::from_secs(4), "{:?}", inv.stats);
+    assert!(inv.stats.fuel_consumed < 100_000_000);
+    assert_eq!(
+        e.reg
+            .runtime()
+            .metrics()
+            .traps
+            .get(&["hostile-nofuel", "deadline-exceeded"]),
+        1
+    );
+    e.assert_healthy();
+}
+
+#[test]
+fn short_sleep_under_the_deadline_succeeds() {
+    let e = env();
+    let inv = e.call("hostile", "/sleep", "ms=20");
+    match &inv.outcome {
+        Outcome::Response(r) => {
+            assert_eq!(r.status, 200);
+            assert!(body(r).starts_with("slept "), "{}", body(r));
+        }
+        other => panic!("a sleep under the deadline must succeed: {other:?}"),
+    }
+    assert!(inv.stats.total >= Duration::from_millis(20));
+}
+
+/// Concurrent sleepers cannot hold invocation threads past their deadline,
+/// so they cannot starve a well-behaved plugin.
+#[test]
+fn concurrent_sleepers_release_their_threads_at_the_deadline() {
+    let e = Arc::new(env());
+    let started = Instant::now();
+    let sleepers: Vec<_> = (0..16)
+        .map(|_| {
+            let e = e.clone();
+            std::thread::spawn(move || trap_kind(&e.call("hostile-nofuel", "/sleep", "")))
+        })
+        .collect();
+    for s in sleepers {
+        assert_eq!(s.join().unwrap(), TrapKind::DeadlineExceeded);
+    }
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "{:?}",
+        started.elapsed()
+    );
+    e.assert_healthy();
+}
