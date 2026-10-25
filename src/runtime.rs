@@ -287,10 +287,13 @@ impl Runtime {
     fn load_component(&self, name: &str, bytes: &[u8], sha: &str) -> Result<(Component, bool)> {
         let cached = self.cache_path(sha);
         if let Some(path) = cached.as_ref().filter(|p| p.exists()) {
-            // SAFETY: the cache directory is written only by this process
-            // (see docs/THREAT_MODEL.md, "AOT cache"); files are keyed by the
-            // component hash and the engine's compatibility hash, and wasmtime
-            // still validates the artifact header against the engine.
+            // SAFETY: the cache directory is trusted and written only by
+            // plugbox (see docs/THREAT_MODEL.md, "AOT cache"); files are keyed
+            // by the component hash and the engine's compatibility hash, and
+            // wasmtime still validates the artifact header against the engine.
+            // The returned component keeps the file memory-mapped for its
+            // whole lifetime, so entries are only ever replaced by rename
+            // (`write_atomic`), never rewritten in place.
             match unsafe { Component::deserialize_file(&self.engine, path) } {
                 Ok(c) => return Ok((c, true)),
                 Err(e) => tracing::warn!(plugin = name, error = %e, "discarding bad cache entry"),

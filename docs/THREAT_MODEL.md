@@ -198,6 +198,17 @@ the cache directory can run native code in the plugbox process. The
 directory must be owned by and writable only by the plugbox user. The cache
 is off by default.
 
+A loaded artifact stays memory-mapped for as long as its component is in
+use, and wasmtime requires the file to stay unchanged for that whole time.
+plugbox only ever replaces an entry by writing a temporary file and
+renaming it over the old one, which leaves existing mappings intact.
+Rewriting a cache file *in place* (copying over it, truncating it) while
+plugbox runs corrupts the components loaded from it: on macOS the next
+instance faults with an out-of-bounds trap, on Linux the process dies with
+`SIGBUS`. To clear the cache, delete the files or the directory; never edit
+them. Test: `pooling::aot_cache_is_written_and_reused` (a damaged entry
+found at startup is discarded and rebuilt).
+
 ## 4. Threats and status
 
 | # | threat | status |

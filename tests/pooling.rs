@@ -111,16 +111,23 @@ fn aot_cache_is_written_and_reused() {
     let dir = TempDir::new("aot");
     let cache = dir.path("cache");
     let settings = EngineSettings::default();
-    let first = runtime_with(settings.clone(), Some(cache.clone()));
-    let a = first.compile_file("hello", &wasm("hello")).unwrap();
-    assert!(!a.from_cache);
-    let entries: Vec<_> = std::fs::read_dir(&cache).unwrap().collect();
-    assert_eq!(entries.len(), 1);
-    let second = runtime_with(settings, Some(cache.clone()));
-    let b = second.compile_file("hello", &wasm("hello")).unwrap();
-    assert!(b.from_cache, "second runtime must load the artifact");
-    assert_eq!(a.sha256, b.sha256);
-    // A corrupted artifact is discarded and rebuilt, not trusted.
+    {
+        let first = runtime_with(settings.clone(), Some(cache.clone()));
+        let a = first.compile_file("hello", &wasm("hello")).unwrap();
+        assert!(!a.from_cache);
+        let entries: Vec<_> = std::fs::read_dir(&cache).unwrap().collect();
+        assert_eq!(entries.len(), 1);
+        let second = runtime_with(settings.clone(), Some(cache.clone()));
+        let b = second.compile_file("hello", &wasm("hello")).unwrap();
+        assert!(b.from_cache, "second runtime must load the artifact");
+        assert_eq!(a.sha256, b.sha256);
+    }
+    // A corrupted artifact is discarded and rebuilt, not trusted. A component
+    // loaded from the cache keeps its file memory-mapped, so the file must not
+    // be rewritten in place while that component is alive (on Linux, libgcc
+    // reads the mapped unwind tables when the component is dropped, and a
+    // truncated mapping raises SIGBUS). Both runtimes above are gone, so this
+    // is the restart case: the next process finds a damaged artifact.
     let entry = std::fs::read_dir(&cache)
         .unwrap()
         .next()
@@ -128,9 +135,14 @@ fn aot_cache_is_written_and_reused() {
         .unwrap()
         .path();
     std::fs::write(&entry, b"corrupt").unwrap();
-    let third = runtime_with(EngineSettings::default(), Some(cache));
+    let third = runtime_with(settings.clone(), Some(cache.clone()));
     let c = third.compile_file("hello", &wasm("hello")).unwrap();
     assert!(!c.from_cache);
+    // The rebuilt artifact replaced the damaged one.
+    let fourth = runtime_with(settings, Some(cache.clone()));
+    let d = fourth.compile_file("hello", &wasm("hello")).unwrap();
+    assert!(d.from_cache, "the rebuilt artifact must be reusable");
+    assert_eq!(std::fs::read_dir(&cache).unwrap().count(), 1);
     let reg_dir = TempDir::new("aot-reg");
     let reg = registry(
         &reg_dir,

@@ -187,9 +187,12 @@ module, `max_unused_warm_slots = pool_size`. Exhausting any of these yields
 1. SHA-256 the bytes.
 2. If `cache_dir` is set and `<sha[..32]>-<engine compat hash>.cwasm`
    exists, `Component::deserialize_file` (unsafe; see the threat model).
-   A corrupt entry is logged and recompiled.
+   The artifact is memory-mapped, not copied, and stays mapped while the
+   component lives. A corrupt entry is logged and recompiled.
 3. Otherwise `Component::new` (JIT compile with cranelift) and, with a
-   cache, `serialize` + atomic write (`tmp` + `rename`).
+   cache, `serialize` + atomic write (`tmp` + `rename`). Entries are only
+   ever replaced by rename, never rewritten in place, so a component that
+   still maps the old file is unaffected.
 4. Run the import policy; reject with every violation listed.
 5. `linker.instantiate_pre` + `PluginPre::new`: all imports are resolved
    once, so per-request instantiation does no name lookups.
