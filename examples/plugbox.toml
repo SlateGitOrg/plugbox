@@ -1,0 +1,56 @@
+# Example plugbox configuration — run with:
+#   make plugins && cargo run --release -- serve --config examples/plugbox.toml
+# Paths are relative to this file.
+
+[server]
+listen = "127.0.0.1:8080"
+admin_listen = "127.0.0.1:9901"   # keep the admin plane on loopback
+max_concurrency = 64
+max_request_body = "1MiB"
+max_response_body = "1MiB"
+
+[runtime]
+instance_strategy = "pooling"
+pool_size = 128
+max_memory = "64MiB"
+epoch_tick_ms = 5
+cache_dir = "../.plugbox-cache"     # AOT artifacts; must be writable only by plugbox
+reload_poll_ms = 500
+
+# Greets with an operator-provided value; no other capability.
+[[plugins]]
+name = "hello"
+route = "/hello"
+component = "../plugins/dist/hello.wasm"
+limits = { fuel = 10_000_000, timeout_ms = 50, memory = "8MiB" }
+[plugins.grants.env]
+vars = { GREETING = "hello from the edge" }
+
+# Hit counter on the shared KV store, namespace "counter".
+[[plugins]]
+name = "counter"
+route = "/count"
+component = "../plugins/dist/counter.wasm"
+[plugins.grants.kv]
+max_keys = 1000
+max_value = "1KiB"
+
+# Edge proxy: may call exactly one upstream prefix.
+[[plugins]]
+name = "fetcher"
+route = "/api"
+component = "../plugins/dist/fetcher.wasm"
+limits = { timeout_ms = 1000 }
+[plugins.grants.env]
+vars = { UPSTREAM = "http://127.0.0.1:18081/v1" }
+[plugins.grants.http]
+allow = ["http://127.0.0.1:18081/v1/*"]
+max_requests = 2
+timeout_ms = 500
+
+# Deliberately misbehaving plugin, to watch the limits trip.
+[[plugins]]
+name = "hostile"
+route = "/hostile"
+component = "../plugins/dist/hostile.wasm"
+limits = { fuel = 50_000_000, timeout_ms = 100, memory = "16MiB" }
