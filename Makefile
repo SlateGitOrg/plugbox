@@ -7,6 +7,8 @@ CARGO        ?= cargo
 WASM_OUT     := $(if $(CARGO_TARGET_DIR),$(CARGO_TARGET_DIR),plugins/target)/wasm32-wasip2/release
 PLUGINS      := hello counter fetcher hostile sneaky
 COVERAGE_MIN ?= 80
+BENCH_ITERATIONS ?= 2000
+BENCH_THREADS ?= 4
 
 .PHONY: check fmt fmt-check lint test plugins coverage demo bench integration clean
 
@@ -43,7 +45,7 @@ demo: plugins
 
 bench: plugins
 	$(CARGO) run --release --locked -- bench --component plugins/dist/hello.wasm \
-		--iterations 2000 --threads 4 --json docs/bench-results.json
+		--iterations $(BENCH_ITERATIONS) --threads $(BENCH_THREADS) --json docs/bench-results.json
 
 # No Docker-based tests exist; kept for interface parity across projects.
 integration:
