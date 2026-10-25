@@ -27,3 +27,4 @@
 //! | [`metrics`] | Prometheus registry |
 //! | [`bench`] | cold vs pooled instantiation benchmark |
 
+pub mod allowlist;
