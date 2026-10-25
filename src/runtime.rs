@@ -100,7 +100,11 @@ pub enum TrapKind {
     DeadlineExceeded,
     /// A memory growth was refused by the limiter.
     MemoryLimit,
+    /// The engine's native wasm stack (`max_wasm_stack`) was exhausted.
     StackOverflow,
+    /// Out-of-bounds linear-memory access — in Rust guests typically a
+    /// shadow-stack overflow, since that stack lives in linear memory.
+    MemoryFault,
     /// The guest aborted (`unreachable`, usually a Rust panic).
     GuestAbort,
     /// Any other trap or host error.
@@ -115,6 +119,7 @@ impl TrapKind {
             TrapKind::DeadlineExceeded => "deadline-exceeded",
             TrapKind::MemoryLimit => "memory-limit",
             TrapKind::StackOverflow => "stack-overflow",
+            TrapKind::MemoryFault => "memory-fault",
             TrapKind::GuestAbort => "guest-abort",
             TrapKind::Other => "trap",
         }
@@ -496,8 +501,12 @@ fn classify(err: &wasmtime::Error, state: &HostState, during_instantiate: bool) 
     if err.downcast_ref::<PoolConcurrencyLimitError>().is_some() {
         return Outcome::Overloaded(format!("{err}"));
     }
-    let detail = format!("{err:#}");
-    let detail = detail.lines().next().unwrap_or("").to_string();
+    // The top-level message is wasmtime's backtrace context; the trap (or
+    // host error) that caused it is the useful part.
+    let detail = match err.downcast_ref::<Trap>() {
+        Some(trap) => trap.to_string(),
+        None => err.root_cause().to_string(),
+    };
     if let Some(requested) = state.limiter.denied() {
         return Outcome::Trap {
             kind: TrapKind::MemoryLimit,
@@ -511,6 +520,7 @@ fn classify(err: &wasmtime::Error, state: &HostState, during_instantiate: bool) 
         Some(Trap::OutOfFuel) => TrapKind::FuelExhausted,
         Some(Trap::Interrupt) => TrapKind::DeadlineExceeded,
         Some(Trap::StackOverflow) => TrapKind::StackOverflow,
+        Some(Trap::MemoryOutOfBounds) => TrapKind::MemoryFault,
         Some(Trap::UnreachableCodeReached) => TrapKind::GuestAbort,
         _ => TrapKind::Other,
     };
@@ -580,6 +590,7 @@ mod tests {
         assert_eq!(Outcome::Response(resp(201, vec![], 0)).error_label(), None);
         assert_eq!(trap(TrapKind::StackOverflow).error_label(), Some("stack-overflow"));
         assert_eq!(trap(TrapKind::GuestAbort).error_label(), Some("guest-abort"));
+        assert_eq!(trap(TrapKind::MemoryFault).error_label(), Some("memory-fault"));
         assert_eq!(trap(TrapKind::Other).error_label(), Some("trap"));
         assert_eq!(Outcome::Overloaded(String::new()).error_label(), Some("overloaded"));
     }

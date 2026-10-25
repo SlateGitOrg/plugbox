@@ -313,6 +313,9 @@ fn build(
     };
     let mut plugins = Vec::with_capacity(config.plugins.len());
     let mut watched = vec![config_path.to_path_buf()];
+    // Components compiled during this build, so several plugins sharing one
+    // component file compile it once.
+    let mut fresh: BTreeMap<String, Arc<CompiledComponent>> = BTreeMap::new();
     for pc in &config.plugins {
         let path = config.resolve(&pc.component);
         let bytes = std::fs::read(&path).map_err(|source| Error::ComponentIo {
@@ -321,16 +324,19 @@ fn build(
         })?;
         let sha = sha256_hex(&bytes);
         let previous = old.and_then(|o| o.get(&pc.name));
-        let reusable: Option<Arc<CompiledComponent>> = old.and_then(|o| {
-            o.plugins
-                .iter()
-                .find(|p| p.compiled.sha256 == sha)
-                .map(|p| p.compiled.clone())
+        let reusable: Option<Arc<CompiledComponent>> = fresh.get(&sha).cloned().or_else(|| {
+            old.and_then(|o| {
+                o.plugins
+                    .iter()
+                    .find(|p| p.compiled.sha256 == sha)
+                    .map(|p| p.compiled.clone())
+            })
         });
         let compiled = match reusable {
             Some(c) => c,
             None => runtime.compile(&pc.name, &bytes)?,
         };
+        fresh.insert(sha, compiled.clone());
         let plugin = runtime.bind(pc, path.clone(), compiled, generation)?;
         match previous {
             None if old.is_some() => report.added.push(pc.name.clone()),

@@ -7,7 +7,8 @@
 //! |------------------|------------------------------------------------|-----------------------------------|
 //! | `/loop`          | infinite loop                                  | fuel or epoch deadline trap       |
 //! | `/bomb`          | allocates until memory runs out                | memory limit trap                 |
-//! | `/stack`         | unbounded recursion                            | stack-overflow trap               |
+//! | `/stack`         | recursion with stack arrays (shadow stack)     | memory-fault trap                 |
+//! | `/recurse`       | recursion with register-only frames            | stack-overflow trap               |
 //! | `/panic`         | `panic!`                                       | guest abort trap                  |
 //! | `/forbidden`     | fetches the cloud metadata address             | `forbidden` error from allow-list |
 //! | `/secret`        | reads env vars and files it was not granted    | `none` / WASI errors              |
@@ -47,10 +48,23 @@ fn describe(err: &HttpError) -> String {
     }
 }
 
+/// Frames hold an address-taken array, so they live on Rust's *shadow*
+/// stack inside linear memory. That stack has no guard page: overflowing it
+/// walks the stack pointer below address 0, which wasm reports as an
+/// out-of-bounds memory access.
 #[allow(unconditional_recursion)]
-fn recurse(depth: u64, pad: [u64; 16]) -> u64 {
+fn recurse_shadow(depth: u64, pad: [u64; 16]) -> u64 {
     let pad = black_box(pad);
-    recurse(depth + 1, pad) + pad[(depth % 16) as usize]
+    recurse_shadow(depth + 1, pad) + pad[(depth % 16) as usize]
+}
+
+/// Frames are plain wasm locals, so only the engine's native wasm stack
+/// grows; wasmtime's `max_wasm_stack` turns that into a stack-overflow trap.
+fn recurse_native(depth: u64) -> u64 {
+    if black_box(depth) == u64::MAX {
+        return 0;
+    }
+    recurse_native(depth + 1).wrapping_add(black_box(1))
 }
 
 impl Guest for Hostile {
@@ -71,7 +85,11 @@ impl Guest for Hostile {
                 }
             }
             "/stack" => {
-                let depth = recurse(0, [7; 16]);
+                let depth = recurse_shadow(0, [7; 16]);
+                text(200, format!("unreachable {depth}"))
+            }
+            "/recurse" => {
+                let depth = recurse_native(0);
                 text(200, format!("unreachable {depth}"))
             }
             "/panic" => panic!("hostile plugin panicked on purpose"),
