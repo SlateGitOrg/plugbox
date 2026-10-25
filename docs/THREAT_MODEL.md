@@ -30,8 +30,11 @@ so you can check them.
 ```
 
 * **Plugin code is untrusted.** The design goal is that a component written
-  by an attacker, granted nothing, can at worst waste its own CPU and memory
-  budget and return a bad response for its own route.
+  by an attacker, granted nothing, can at worst waste its own CPU, memory
+  and wall-clock budget (`timeout_ms`, whether it spins or blocks) and
+  return a bad response for its own route. Each request still holds one
+  concurrency permit for up to that budget, so a client flooding one route
+  can fill the pool; that is request flooding (T11), not a sandbox escape.
 * **HTTP clients are untrusted.** They choose method, path, query, headers
   and body for a plugin.
 * **Upstreams are semi-trusted.** They are on the operator's allow-list,
@@ -77,6 +80,7 @@ so you can check them.
 |---|---|---|---|
 | CPU, deterministic | wasmtime fuel, `limits.fuel` per request | trap, `504 fuel-exhausted` | `limits::infinite_loop_trips_fuel` |
 | CPU, wall clock | epoch interruption: ticker thread every `epoch_tick_ms`, deadline `ceil(timeout/tick)+1` ticks | trap, `504 deadline-exceeded` | `limits::infinite_loop_trips_epoch_deadline_without_fuel` |
+| wall clock while blocked in WASI | deadline-capped `wasi:clocks/monotonic-clock` (`src/clock.rs`): every clock pollable fires no later than the request deadline, and a wait the deadline cut short becomes a trap | `504 deadline-exceeded` at the deadline, thread and permit released | `limits::blocking_sleep_is_cut_at_the_deadline`, `limits::concurrent_sleepers_release_their_threads_at_the_deadline`, `server::sleeping_plugins_release_their_permits_at_the_deadline`, `clock::tests::*` |
 | memory | `ResourceLimiter` over *all* memories of the component, plus `max_memory_size` on the pool | growth refused, guest aborts, `502 memory-limit` | `limits::memory_bomb_trips_memory_limit` |
 | native stack | `max_wasm_stack = 1 MiB` | trap, `502 stack-overflow` | `limits::unbounded_recursion_trips_stack_limit` |
 | shadow stack | lives in linear memory, so overflow is an out-of-bounds access | trap, `502 memory-fault` | `limits::shadow_stack_overflow_is_a_contained_memory_fault` |
@@ -89,10 +93,28 @@ so you can check them.
 
 Fuel and epochs are both always enabled engine-wide. Setting
 `limits.fuel = 0` disables only fuel for that plugin; the wall-clock
-deadline still applies. Host calls (KV, outbound HTTP) are not interruptible
-by epochs, so every host call is itself bounded: outbound HTTP timeouts are
-capped by the request's *remaining* budget, and KV operations are in-memory
-map operations bounded by the quotas.
+deadline still applies. Fuel and epochs are only checked while wasm code
+runs, so neither can interrupt a host call, and every host call is bounded
+on its own:
+
+* outbound HTTP timeouts are capped by the request's *remaining* budget;
+* KV operations are in-memory map operations bounded by the quotas;
+* **blocking WASI calls.** The only WASI pollables a plugbox guest can block
+  on are monotonic-clock subscriptions (`std::thread::sleep`, `poll` with a
+  timeout): sockets are refused at load, nothing is preopened, stdin is
+  empty and stdout/stderr are in-memory. Stock wasmtime-wasi would block the
+  host thread for as long as the guest asks, holding a `spawn_blocking`
+  thread and one server-wide concurrency permit, so ~`max_concurrency`
+  sleeping requests to one plugin would make every plugin answer `503`.
+  plugbox therefore shadows the four `wasi:clocks/monotonic-clock`
+  functions (`src/clock.rs`, linked in `host::add_to_linker`). Each
+  `subscribe-duration` / `subscribe-instant` pollable is capped at the
+  request deadline; if the deadline is what ended the wait, the request is
+  reported as `504 deadline-exceeded` even if the guest returns a response
+  before the next epoch check. Measured with a guest that sleeps 2 s under
+  `timeout_ms = 50, fuel = 1_000_000`: 2.003 s before the fix, 53 ms after.
+  If a future change links another pollable that can block (sockets,
+  `wasi:http`, a real stdin), it must be capped the same way.
 
 **The host stays healthy.** After every limit trips, the tests check that a
 well-behaved plugin still answers, `in_flight` is back to 0 and the pool has
@@ -180,7 +202,7 @@ is off by default.
 
 | # | threat | status |
 |---|---|---|
-| T1 | Plugin burns CPU forever | mitigated: fuel + epoch deadline |
+| T1 | Plugin burns CPU or wall-clock time forever (busy loop, or blocking in `wasi:io/poll`) | mitigated: fuel + epoch deadline for running wasm; deadline-capped monotonic clock for blocked waits (§3.2) |
 | T2 | Plugin exhausts host memory | mitigated: per-instance limiter, pool `max_memory_size`, pool size bounds the total |
 | T3 | Plugin crashes the host (panic, stack overflow) | mitigated: traps are values; guest stack overflows are caught by wasmtime |
 | T4 | Plugin reads host secrets (env, files) | mitigated: inert WASI, explicit env grants |

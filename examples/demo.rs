@@ -239,6 +239,12 @@ async fn main() {
         show(
             data,
             "GET",
+            "/nofuel/sleep",
+            "1 h thread::sleep in wasi:io/poll, cut at the 40 ms deadline",
+        );
+        show(
+            data,
+            "GET",
             "/hostile/bomb",
             "allocates until the 16 MiB budget refuses",
         );

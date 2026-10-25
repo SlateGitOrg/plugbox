@@ -46,6 +46,7 @@ flowchart TB
 | `capability/` | ~290 | resolving grants; the namespaced KV store with quotas |
 | `engine.rs` | ~130 | engine config (fuel, epochs, pooling, memory reservation), epoch ticker thread |
 | `limits.rs` | ~110 | `ResourceLimiter` that budgets all memories of a component together |
+| `clock.rs` | ~150 | deadline-capped `wasi:clocks/monotonic-clock`, so WASI waits end at the request deadline |
 | `policy.rs` | ~80 | load-time import/export policy |
 | `host.rs` | ~290 | `bindgen!` output, per-request `HostState`, host functions |
 | `runtime.rs` | ~540 | AOT cache, compile + policy + pre-link, bind grants, invoke, trap classification, response validation, metrics |
@@ -148,8 +149,13 @@ Both are enabled on the engine (`engine.rs::build_engine`).
 `limits.fuel = 0` gives that plugin `u64::MAX` fuel, which leaves only the
 deadline. The demo uses it to show the epoch path on its own.
 
-Host calls cannot be interrupted by epochs (wasmtime only checks at wasm
-safepoints). Every host call is bounded independently, see the threat model.
+Host calls cannot be interrupted by epochs or fuel (wasmtime only checks at
+wasm safepoints). Every host call is bounded independently, see the threat
+model. That includes WASI waits: `clock.rs` shadows
+`wasi:clocks/monotonic-clock` after `add_to_linker_sync`, so every clock
+pollable (`thread::sleep`, `poll` timeouts) fires no later than the request
+deadline, and `runtime.rs::invoke` reports a wait the deadline cut short as
+`deadline-exceeded`.
 
 ## 5. Memory limits and the pooling allocator
 

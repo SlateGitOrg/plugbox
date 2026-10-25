@@ -176,56 +176,58 @@ of a real run, also saved in [docs/demo-output.txt](docs/demo-output.txt):
 
 ```
 == plugbox demo ==
-loaded 5 plugins in 100 ms (pooling allocator, epoch tick 5 ms); fixture upstream on 127.0.0.1:60306
-  hostile         /hostile  e7236a80e20b  grants: none
-  hostile-nofuel  /nofuel   e7236a80e20b  grants: none
+loaded 5 plugins in 118 ms (pooling allocator, epoch tick 5 ms); fixture upstream on 127.0.0.1:63162
+  hostile         /hostile  98f66e7e28aa  grants: none
+  hostile-nofuel  /nofuel   98f66e7e28aa  grants: none
   counter         /count    fd629b9dc4d9  grants: kv[counter rw]
   hello           /hello    3f4f4beec230  grants: env[GREETING]
   fetcher         /api      ecd4f106f749  grants: env[UPSTREAM] http[8 calls/req]
-data plane http://127.0.0.1:60307  admin plane http://127.0.0.1:60308
+data plane http://127.0.0.1:63163  admin plane http://127.0.0.1:63164
 
 1. well-behaved plugins
-  GET  /hello?name=edge                             -> 200                        0.92 ms  hello from the edge, edge!
+  GET  /hello?name=edge                             -> 200                        0.82 ms  hello from the edge, edge!
        └ env grant: GREETING
-  POST /count/hit/home                              -> 200                        0.35 ms  {"name":"home","count":1}
+  POST /count/hit/home                              -> 200                        0.43 ms  {"name":"home","count":1}
   POST /count/hit/home                              -> 200                        0.24 ms  {"name":"home","count":2}
-  POST /count/hit/home                              -> 200                        0.23 ms  {"name":"home","count":3}
+  POST /count/hit/home                              -> 200                        0.22 ms  {"name":"home","count":3}
        └ KV state outlives each per-request instance
-  GET  /api/proxy/items/42                          -> 200                        0.50 ms  {"item":42,"served_by":"fixture-upstream","target":"/v1/items/42"}
+  GET  /api/proxy/items/42                          -> 200                        0.57 ms  {"item":42,"served_by":"fixture-upstream","target":"/v1/items/42"}
        └ outbound HTTP via the allow-list
 
 2. capability denials (typed errors, no trap)
-  GET  /api/fetch?url=http://169.254.169.254/latest/meta-data/ -> 403                        0.24 ms  forbidden by allow-list: http://169.254.169.254/latest/meta-data/ matches no allow rule
+  GET  /api/fetch?url=http://169.254.169.254/latest/meta-data/ -> 403                        0.25 ms  forbidden by allow-list: http://169.254.169.254/latest/meta-data/ matches no allow rule
        └ cloud metadata: not on the allow-list
-  GET  /api/fetch?url=http://127.0.0.1@169.254.169.254/ -> 400                        0.21 ms  invalid url: userinfo, backslashes and percent-escapes are not allowed in the host
+  GET  /api/fetch?url=http://127.0.0.1@169.254.169.254/ -> 400                        0.24 ms  invalid url: userinfo, backslashes and percent-escapes are not allowed in the host
        └ userinfo confusion rejected by the URL parser
-  GET  /hostile/secret                              -> 200                        0.37 ms  {"granted_secret":false,"wasi_env":[],"etc_passwd":"Err(Os { code: 44, kind: NotFound, mes…
+  GET  /hostile/secret                              -> 200                        0.41 ms  {"granted_secret":false,"wasi_env":[],"etc_passwd":"Err(Os { code: 44, kind: NotFound, mes…
        └ no env, no host env, no filesystem
-  GET  /hostile/kv                                  -> 403                        0.23 ms  kv refused: KvError::NotGranted
+  GET  /hostile/kv                                  -> 403                        0.24 ms  kv refused: KvError::NotGranted
        └ no KV grant
 
 3. resource limits (instance discarded, host unaffected)
-  GET  /hostile/loop                                -> 504 [fuel-exhausted]       3.93 ms  plugin error: fuel-exhausted
+  GET  /hostile/loop                                -> 504 [fuel-exhausted]       4.03 ms  plugin error: fuel-exhausted
        └ infinite loop, 50M fuel budget
-  GET  /nofuel/loop                                 -> 504 [deadline-exceeded]   65.40 ms  plugin error: deadline-exceeded
+  GET  /nofuel/loop                                 -> 504 [deadline-exceeded]   65.66 ms  plugin error: deadline-exceeded
        └ infinite loop, fuel off, 40 ms epoch deadline
-  GET  /hostile/bomb                                -> 502 [memory-limit]         2.13 ms  plugin error: memory-limit
+  GET  /nofuel/sleep                                -> 504 [deadline-exceeded]   43.83 ms  plugin error: deadline-exceeded
+       └ 1 h thread::sleep in wasi:io/poll, cut at the 40 ms deadline
+  GET  /hostile/bomb                                -> 502 [memory-limit]         3.34 ms  plugin error: memory-limit
        └ allocates until the 16 MiB budget refuses
-  GET  /hostile/recurse                             -> 502 [stack-overflow]       0.51 ms  plugin error: stack-overflow
+  GET  /hostile/recurse                             -> 502 [stack-overflow]       0.59 ms  plugin error: stack-overflow
        └ native wasm stack exhausted
   GET  /hostile/panic                               -> 502 [guest-abort]          0.37 ms  plugin error: guest-abort
        └ Rust panic = guest abort
-  GET  /hostile/huge-response?bytes=4000000         -> 502 [invalid-response]     1.01 ms  plugin error: invalid-response
+  GET  /hostile/huge-response?bytes=4000000         -> 502 [invalid-response]     1.08 ms  plugin error: invalid-response
        └ 4 MB body > 1 MiB response limit
-  GET  /hello?name=still-healthy                    -> 200                        0.33 ms  hello from the edge, still-healthy!
+  GET  /hello?name=still-healthy                    -> 200                        0.31 ms  hello from the edge, still-healthy!
        └ host still serving
 
 4. hot reload
   POST /reload -> 200 { "added": [], "generation": 2, "rebound": [ "hello" ], "removed": [], "unchanged": [ "counter", "fetcher", "hostile", "hostile-nofuel" ], "updated": [], "warnings": [] }
-  GET  /hello?name=edge                             -> 200                        0.28 ms  bonjour, edge!
+  GET  /hello?name=edge                             -> 200                        0.29 ms  bonjour, edge!
        └ new grant, same compiled component
   POST /reload (broken component) -> 422 active_generation=2 error="plugin `hello`: expected `(`"
-  GET  /hello?name=edge                             -> 200                        0.27 ms  bonjour, edge!
+  GET  /hello?name=edge                             -> 200                        0.26 ms  bonjour, edge!
        └ old snapshot keeps serving
 
 5. admin plane
@@ -237,7 +239,7 @@ data plane http://127.0.0.1:60307  admin plane http://127.0.0.1:60308
     plugbox_traps_total{plugin="hostile",kind="invalid-response"} 1
     plugbox_traps_total{plugin="hostile",kind="memory-limit"} 1
     plugbox_traps_total{plugin="hostile",kind="stack-overflow"} 1
-    plugbox_traps_total{plugin="hostile-nofuel",kind="deadline-exceeded"} 1
+    plugbox_traps_total{plugin="hostile-nofuel",kind="deadline-exceeded"} 2
     plugbox_capability_denials_total{plugin="fetcher",capability="http"} 1
     plugbox_capability_denials_total{plugin="hostile",capability="env"} 1
     plugbox_capability_denials_total{plugin="hostile",capability="kv"} 1
@@ -251,10 +253,13 @@ data plane http://127.0.0.1:60307  admin plane http://127.0.0.1:60308
 demo complete
 ```
 
-The deadline-exceeded request takes about 65 ms against a 40 ms budget.
+The `/nofuel/loop` request takes about 65 ms against a 40 ms budget.
 That is the epoch tick (5 ms), the extra safety tick, and scheduling delay
 on a machine whose load average was around 9 at the time. The memory bomb
-fails in about 2 ms because the limiter refuses the growth immediately.
+fails in about 2 ms because the limiter refuses the growth immediately. The
+one-hour `thread::sleep` ends in about 44 ms: the guest runs no wasm while
+it waits, so the deadline-capped clock (not the epoch tick) ends it exactly
+at the deadline.
 
 ## Tests
 
@@ -265,14 +270,14 @@ with a line-coverage gate of 80%.
 
 | suite | what it proves |
 |---|---|
-| `tests/limits.rs` (14) | infinite loop trips fuel; trips the epoch deadline with fuel off; memory bomb trips the memory limit; native and shadow stack overflows are contained; panics are contained; forbidden host (metadata address) is refused without a trap; ungranted env/files/KV are invisible; outbound call budget; log/stdout floods are capped; oversized responses are replaced; the host stays healthy under concurrent abuse and after 100 sequential traps with no leaked pool slots |
+| `tests/limits.rs` (17) | infinite loop trips fuel; trips the epoch deadline with fuel off; a guest blocked in `thread::sleep` (WASI poll) is cut at the deadline, alone and 16 at a time, while a short sleep still succeeds; memory bomb trips the memory limit; native and shadow stack overflows are contained; panics are contained; forbidden host (metadata address) is refused without a trap; ungranted env/files/KV are invisible; outbound call budget; log/stdout floods are capped; oversized responses are replaced; the host stays healthy under concurrent abuse and after 100 sequential traps with no leaked pool slots |
 | `tests/capabilities.rs` (6) | exact env grants; request fields round-trip; KV persists across fresh instances, read-only and no-grant variants of the same binary; KV quotas surface as guest errors; outbound reaches only allow-listed upstreams, DNS-to-loopback refused unless `allow_private`; unreachable upstream is a typed transport error |
 | `tests/policy.rs` (4) | the raw-socket plugin is rejected at load; a registry will not start with it; all sample plugins pass; a component without the handler export is rejected |
 | `tests/reload.rs` (7) | grant change rebinds without recompiling; component swap updates and KV survives; failed reload keeps serving the old snapshot; restart-only settings warn; add/remove plugins; in-flight requests finish on the old version; the file watcher reloads |
 | `tests/pooling.rs` (4) | pool exhaustion sheds instead of blocking; instances never share state between requests; on-demand strategy behaves the same; AOT cache is written and reused |
-| `tests/server.rs` (5) | routing over real HTTP; traps map to 502/504 with `x-plugbox-error`; oversized bodies get 413 before the sandbox; excess concurrency is shed; the admin plane |
+| `tests/server.rs` (6) | routing over real HTTP; traps map to 502/504 with `x-plugbox-error`; oversized bodies get 413 before the sandbox; excess concurrency is shed; sleeping plugins release their permits at the deadline; the admin plane |
 | `tests/bench.rs` (2) | every benchmark mode produces consistent numbers; failing requests fail the benchmark |
-| unit tests (61, incl. 4 property tests) | URL parser and allow rules (proptest: never panics, round-trips, userinfo always rejected, no look-alike wildcard matches), address policy, HTTP response parser (proptest: never panics, chunked round-trip), KV against a model (proptest), config validation, memory limiter, metrics rendering, trap classification, response validation |
+| unit tests (63, incl. 4 property tests) | URL parser and allow rules (proptest: never panics, round-trips, userinfo always rejected, no look-alike wildcard matches), address policy, HTTP response parser (proptest: never panics, chunked round-trip), KV against a model (proptest), config validation, memory limiter, deadline-capped clock waits, metrics rendering, trap classification, response validation |
 
 Result of `make check` from a fresh clone (see the report for the full
 log): **103 tests passed, 0 failed; line coverage 96.8%** (`cargo llvm-cov
@@ -334,8 +339,11 @@ The full list, with the cost of each ruling, is in
 1. **Fresh instance per request.** No state survives in linear memory, so
    there is no cross-request leak and a trapped instance is never re-entered.
    State that must persist goes through KV.
-2. **Fuel and epochs, both always on.** Fuel is deterministic, and the
-   tests depend on that. Epochs bound wall-clock time.
+2. **Fuel and epochs, both always on, plus a deadline-capped clock.** Fuel
+   is deterministic, and the tests depend on that. Epochs bound wall-clock
+   time while wasm runs; the monotonic clock is replaced so a guest blocked
+   in `wasi:io/poll` (e.g. `thread::sleep`) is also released at its
+   deadline.
 3. **Deny without trapping.** Every capability interface is always linked.
    Ungranted calls return typed errors, so one binary can run under
    different grants. Traps are reserved for resource limits.
@@ -373,8 +381,12 @@ side channels, wasmtime bugs, plaintext egress), is in
 * **Admin plane has no authentication.** It defaults to loopback and must
   stay on a trusted network.
 * **Sync execution model.** Each concurrent invocation holds an OS thread
-  from tokio's blocking pool, and host calls (outbound HTTP) block that
-  thread. Very high concurrency would want wasmtime's async API.
+  from tokio's blocking pool, and host calls (outbound HTTP, clock waits)
+  block that thread, up to the request deadline. A plugin can therefore hold
+  its permit for its whole `timeout_ms` without burning CPU; keep timeouts
+  short relative to `max_concurrency`. Very high concurrency would want
+  wasmtime's async API. Blocked waits are bounded only because the clock is
+  the sole blocking pollable plugbox links (see the threat model, §3.2).
 * **Side channels are out of scope.** Mutually hostile tenants share one
   process. plugbox does nothing beyond wasmtime's defaults against
   Spectre-class attacks.
