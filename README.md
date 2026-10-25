@@ -275,7 +275,7 @@ with a line-coverage gate of 80%.
 | unit tests (61, incl. 4 property tests) | URL parser and allow rules (proptest: never panics, round-trips, userinfo always rejected, no look-alike wildcard matches), address policy, HTTP response parser (proptest: never panics, chunked round-trip), KV against a model (proptest), config validation, memory limiter, metrics rendering, trap classification, response validation |
 
 Result of `make check` from a fresh clone (see the report for the full
-log): **103 tests passed, 0 failed; line coverage 96.7%** (`cargo llvm-cov
+log): **103 tests passed, 0 failed; line coverage 96.8%** (`cargo llvm-cov
 --lib --tests --ignore-filename-regex 'src/main\.rs'`, the command `make
 coverage` runs).
 
