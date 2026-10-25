@@ -28,6 +28,7 @@
 //! | [`bench`] | cold vs pooled instantiation benchmark |
 
 pub mod allowlist;
+pub mod bench;
 pub mod capability;
 pub mod config;
 pub mod engine;
@@ -39,4 +40,11 @@ pub mod outbound;
 pub mod policy;
 pub mod registry;
 pub mod runtime;
+pub mod server;
 pub mod stdio;
+
+pub use config::Config;
+pub use error::{Error, Result};
+pub use host::{Request, Response};
+pub use registry::Registry;
+pub use runtime::{Invocation, LoadedPlugin, Outcome, Runtime, RuntimeOptions, TrapKind};
