@@ -31,4 +31,5 @@ pub mod allowlist;
 pub mod capability;
 pub mod config;
 pub mod error;
+pub mod metrics;
 pub mod outbound;
