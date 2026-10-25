@@ -418,6 +418,22 @@ impl Config {
                 if kv.max_keys == 0 {
                     return Err(ctx("grants.kv.max_keys must be at least 1"));
                 }
+                // A plugin's implicit namespace (its own name) is private:
+                // another plugin cannot join it just by naming it. Sharing
+                // requires both sides to opt in with an explicit namespace.
+                if let Some(ns) = &kv.namespace
+                    && let Some(owner) = self.plugins.iter().find(|o| {
+                        o.name != p.name
+                            && o.name == *ns
+                            && o.grants.kv.as_ref().is_some_and(|k| k.namespace.is_none())
+                    })
+                {
+                    return Err(ctx(&format!(
+                        "grants.kv.namespace `{ns}` is the private namespace of plugin `{}`; \
+                         to share it, both plugins must set grants.kv.namespace explicitly",
+                        owner.name
+                    )));
+                }
             }
         }
         Ok(())
@@ -613,6 +629,12 @@ mod tests {
                 "namespace",
             ),
             (plugin("[plugins.grants.kv]\nmax_keys = 0"), "max_keys"),
+            (
+                plugin("[plugins.grants.kv]\n")
+                    + "[[plugins]]\nname='q'\nroute='/q'\ncomponent='q.wasm'\n\
+                       [plugins.grants.kv]\nnamespace = 'p'\n",
+                "private namespace of plugin `p`",
+            ),
             (
                 plugin("[plugins.grants.env]\nvars = { 'A=B' = 'x' }"),
                 "invalid env var",

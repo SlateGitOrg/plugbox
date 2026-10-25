@@ -28,6 +28,7 @@ name = "counter"
 route = "/count"
 component = {counter}
 [plugins.grants.kv]
+namespace = "counter"
 max_keys = 3
 
 [[plugins]]
