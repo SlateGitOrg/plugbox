@@ -1,0 +1,50 @@
+[
+  {
+    "mode": "cold-jit",
+    "samples": 100,
+    "p50_us": 26269.334,
+    "p90_us": 42994.5,
+    "p99_us": 66129.708,
+    "mean_us": 30033.417920000014,
+    "max_us": 71781.5,
+    "instantiate_p50_us": 0.0,
+    "throughput_threads": 4,
+    "throughput_rps": 32.17292906130032
+  },
+  {
+    "mode": "cold-aot",
+    "samples": 100,
+    "p50_us": 444.79200000000003,
+    "p90_us": 497.583,
+    "p99_us": 636.625,
+    "mean_us": 467.76923999999997,
+    "max_us": 1303.916,
+    "instantiate_p50_us": 0.0,
+    "throughput_threads": 4,
+    "throughput_rps": 1664.6517444509875
+  },
+  {
+    "mode": "warm-ondemand",
+    "samples": 2000,
+    "p50_us": 23.75,
+    "p90_us": 27.416999999999998,
+    "p99_us": 40.417,
+    "mean_us": 24.943602000000027,
+    "max_us": 157.292,
+    "instantiate_p50_us": 11.0,
+    "throughput_threads": 4,
+    "throughput_rps": 75789.87257827673
+  },
+  {
+    "mode": "warm-pooled",
+    "samples": 2000,
+    "p50_us": 32.792,
+    "p90_us": 37.833,
+    "p99_us": 64.25,
+    "mean_us": 33.98654550000004,
+    "max_us": 149.708,
+    "instantiate_p50_us": 13.458,
+    "throughput_threads": 4,
+    "throughput_rps": 41204.97097593953
+  }
+]

@@ -1,0 +1,74 @@
+== plugbox demo ==
+loaded 5 plugins in 100 ms (pooling allocator, epoch tick 5 ms); fixture upstream on 127.0.0.1:60306
+  hostile         /hostile  e7236a80e20b  grants: none
+  hostile-nofuel  /nofuel   e7236a80e20b  grants: none
+  counter         /count    fd629b9dc4d9  grants: kv[counter rw]
+  hello           /hello    3f4f4beec230  grants: env[GREETING]
+  fetcher         /api      ecd4f106f749  grants: env[UPSTREAM] http[8 calls/req]
+data plane http://127.0.0.1:60307  admin plane http://127.0.0.1:60308
+
+1. well-behaved plugins
+  GET  /hello?name=edge                             -> 200                        0.92 ms  hello from the edge, edge!
+       └ env grant: GREETING
+  POST /count/hit/home                              -> 200                        0.35 ms  {"name":"home","count":1}
+  POST /count/hit/home                              -> 200                        0.24 ms  {"name":"home","count":2}
+  POST /count/hit/home                              -> 200                        0.23 ms  {"name":"home","count":3}
+       └ KV state outlives each per-request instance
+  GET  /api/proxy/items/42                          -> 200                        0.50 ms  {"item":42,"served_by":"fixture-upstream","target":"/v1/items/42"}
+       └ outbound HTTP via the allow-list
+
+2. capability denials (typed errors, no trap)
+  GET  /api/fetch?url=http://169.254.169.254/latest/meta-data/ -> 403                        0.24 ms  forbidden by allow-list: http://169.254.169.254/latest/meta-data/ matches no allow rule
+       └ cloud metadata: not on the allow-list
+  GET  /api/fetch?url=http://127.0.0.1@169.254.169.254/ -> 400                        0.21 ms  invalid url: userinfo, backslashes and percent-escapes are not allowed in the host
+       └ userinfo confusion rejected by the URL parser
+  GET  /hostile/secret                              -> 200                        0.37 ms  {"granted_secret":false,"wasi_env":[],"etc_passwd":"Err(Os { code: 44, kind: NotFound, mes…
+       └ no env, no host env, no filesystem
+  GET  /hostile/kv                                  -> 403                        0.23 ms  kv refused: KvError::NotGranted
+       └ no KV grant
+
+3. resource limits (instance discarded, host unaffected)
+  GET  /hostile/loop                                -> 504 [fuel-exhausted]       3.93 ms  plugin error: fuel-exhausted
+       └ infinite loop, 50M fuel budget
+  GET  /nofuel/loop                                 -> 504 [deadline-exceeded]   65.40 ms  plugin error: deadline-exceeded
+       └ infinite loop, fuel off, 40 ms epoch deadline
+  GET  /hostile/bomb                                -> 502 [memory-limit]         2.13 ms  plugin error: memory-limit
+       └ allocates until the 16 MiB budget refuses
+  GET  /hostile/recurse                             -> 502 [stack-overflow]       0.51 ms  plugin error: stack-overflow
+       └ native wasm stack exhausted
+  GET  /hostile/panic                               -> 502 [guest-abort]          0.37 ms  plugin error: guest-abort
+       └ Rust panic = guest abort
+  GET  /hostile/huge-response?bytes=4000000         -> 502 [invalid-response]     1.01 ms  plugin error: invalid-response
+       └ 4 MB body > 1 MiB response limit
+  GET  /hello?name=still-healthy                    -> 200                        0.33 ms  hello from the edge, still-healthy!
+       └ host still serving
+
+4. hot reload
+  POST /reload -> 200 { "added": [], "generation": 2, "rebound": [ "hello" ], "removed": [], "unchanged": [ "counter", "fetcher", "hostile", "hostile-nofuel" ], "updated": [], "warnings": [] }
+  GET  /hello?name=edge                             -> 200                        0.28 ms  bonjour, edge!
+       └ new grant, same compiled component
+  POST /reload (broken component) -> 422 active_generation=2 error="plugin `hello`: expected `(`"
+  GET  /hello?name=edge                             -> 200                        0.27 ms  bonjour, edge!
+       └ old snapshot keeps serving
+
+5. admin plane
+  GET /health -> status="ok" generation=2 plugins=5 in_flight=0 pool_live_instances=0
+    last_reload_error: plugin `hello`: expected `(`
+  GET /metrics (selected series):
+    plugbox_traps_total{plugin="hostile",kind="fuel-exhausted"} 1
+    plugbox_traps_total{plugin="hostile",kind="guest-abort"} 1
+    plugbox_traps_total{plugin="hostile",kind="invalid-response"} 1
+    plugbox_traps_total{plugin="hostile",kind="memory-limit"} 1
+    plugbox_traps_total{plugin="hostile",kind="stack-overflow"} 1
+    plugbox_traps_total{plugin="hostile-nofuel",kind="deadline-exceeded"} 1
+    plugbox_capability_denials_total{plugin="fetcher",capability="http"} 1
+    plugbox_capability_denials_total{plugin="hostile",capability="env"} 1
+    plugbox_capability_denials_total{plugin="hostile",capability="kv"} 1
+    plugbox_outbound_requests_total{plugin="fetcher",result="forbidden"} 1
+    plugbox_outbound_requests_total{plugin="fetcher",result="invalid_url"} 1
+    plugbox_outbound_requests_total{plugin="fetcher",result="ok"} 1
+    plugbox_reloads_total{result="error"} 1
+    plugbox_reloads_total{result="ok"} 1
+    plugbox_pool_live_instances 0
+
+demo complete
