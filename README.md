@@ -293,7 +293,7 @@ bomb fails in about 3 ms because the limiter refuses the growth at once.
 
 ## How it works
 
-The full list of rulings, each with its cost, is in
+The full list of design decisions, each with its cost, is in
 [DECISIONS.md](DECISIONS.md). The ones that shape the system:
 
 1. **Fresh instance per request.** No state survives in linear memory, so
